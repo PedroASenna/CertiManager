@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+senha app.txt
+*.txt
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

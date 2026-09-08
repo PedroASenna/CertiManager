@@ -1,0 +1,5 @@
+{
+  "name": "CertiManager Web",
+  "description": "Sistema avançado de gestão de certificados digitais para escritórios de contabilidade com importação em lote e monitoramento em tempo real.",
+  "requestFramePermissions": []
+}
