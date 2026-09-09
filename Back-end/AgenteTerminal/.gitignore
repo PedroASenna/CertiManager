@@ -1,0 +1,8 @@
+target/
+dependency-reduced-pom.xml
+service/AgenteTerminal.exe
+service/AgenteTerminal.wrapper.log
+service/AgenteTerminal.out.log
+service/AgenteTerminal.err.log
+*.novo.jar
+aplicar-atualizacao.bat
