@@ -56,13 +56,14 @@ Para não ser necessário visitar cada terminal manualmente a cada nova versão,
 * **Roda como Serviço do Windows** (via [WinSW](https://github.com/winsw/winsw)): inicia sozinho com o Windows, mesmo sem ninguém logado, e reinicia sozinho se cair.
 * **Se auto-atualiza sozinho:** a cada poucas horas, ele consulta `GET {ServidorLocal}/api/agente/versao` no Servidor Central. Se houver uma versão mais nova, baixa o novo `.jar`, confere o hash SHA-256, para o serviço, troca o arquivo e reinicia — tudo sozinho, sem intervenção humana no terminal.
 
-O Servidor Central precisa expor esse endpoint de versão, respondendo:
+O `ServidorLocal` já expõe esse endpoint de versão:
 ```json
-{ "versao": "1.1.0", "url": "http://servidor:8888/downloads/AgenteTerminal-1.1.0.jar", "sha256": "<hash hexadecimal do jar>" }
+GET /api/agente/versao
+-> { "versao": "1.1.0", "url": "http://servidor:8888/downloads/AgenteTerminal-1.1.0.jar", "sha256": "<hash hexadecimal do jar>" }
 ```
-> Esse endpoint ainda não existe no `ServidorLocal` (que também está por implementar) — é o próximo passo para o auto-update funcionar ponta a ponta.
+Publicar uma nova versão do agente é só copiar o `.jar` (nomeado `AgenteTerminal-<versao>.jar`, ex: `AgenteTerminal-1.1.0.jar`) para a pasta `releases/` do `ServidorLocal` — ele descobre sozinho qual é a versão mais recente publicada (pelo nome do arquivo) e calcula o SHA-256 na hora, sem precisar de nenhum arquivo-ponteiro mantido à mão. Se `releases/` estiver vazia, o endpoint responde `404` e o agente simplesmente tenta de novo no próximo ciclo.
 
-Veja a seção [Compilando e Instalando o AgenteTerminal](#3-compilando-e-instalando-o-agenteterminal-em-cada-terminal) para o passo a passo.
+Veja as seções [Compilando o Servidor Central](#2-compilando-o-servidor-central) e [Compilando e Instalando o AgenteTerminal](#3-compilando-e-instalando-o-agenteterminal-em-cada-terminal) para o passo a passo.
 
 ---
 
@@ -85,7 +86,15 @@ Veja a seção [Compilando e Instalando o AgenteTerminal](#3-compilando-e-instal
    ```
 
 ### 2. Compilando o Servidor Central
-> O `ServidorLocal.java` ainda está por implementar neste repositório.
+
+O código-fonte fica em `Back-end/ServidorLocal`. **Por enquanto**, este módulo cobre apenas a distribuição de novas versões do `AgenteTerminal` (o endpoint que os terminais consultam para se auto-atualizar); o restante do Servidor Central descrito na arquitetura (banco SQLite, robô de e-mails, hospedagem do Front-end) ainda está por implementar.
+
+```bash
+cd Back-end/ServidorLocal
+mvn package
+java -jar target/ServidorLocal.jar
+```
+Isso sobe o servidor na porta `8888` e cria a pasta `releases/`, onde você publica novas versões do `AgenteTerminal.jar` (veja a seção de arquitetura acima).
 
 ### 3. Compilando e Instalando o AgenteTerminal (em cada terminal)
 
