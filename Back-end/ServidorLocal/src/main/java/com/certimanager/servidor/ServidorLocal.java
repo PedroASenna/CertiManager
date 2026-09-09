@@ -1,126 +1,149 @@
 package com.certimanager.servidor;
 
-import com.google.gson.Gson;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import com.certimanager.servidor.auth.AuthContexto;
+import com.certimanager.servidor.auth.ChaveSecreta;
+import com.certimanager.servidor.auth.Jwt;
+import com.certimanager.servidor.auth.Sessao;
+import com.certimanager.servidor.db.Auditoria;
+import com.certimanager.servidor.db.Banco;
+import com.certimanager.servidor.db.Esquema;
+import com.certimanager.servidor.email.RoboEmail;
+import com.certimanager.servidor.rotas.AgenteRotas;
+import com.certimanager.servidor.rotas.AutenticacaoRotas;
+import com.certimanager.servidor.rotas.CertificadosRotas;
+import com.certimanager.servidor.rotas.CnpjRotas;
+import com.certimanager.servidor.rotas.ConfigEmailRotas;
+import com.certimanager.servidor.rotas.ImportacaoRotas;
+import com.certimanager.servidor.rotas.LogsRotas;
+import com.certimanager.servidor.rotas.ManutencaoRotas;
+import com.certimanager.servidor.rotas.UsuariosRotas;
+import io.javalin.Javalin;
+import io.javalin.config.RoutesConfig;
+import io.javalin.http.BadRequestResponse;
+import io.javalin.http.ForbiddenResponse;
+import io.javalin.http.NotFoundResponse;
+import io.javalin.http.UnauthorizedResponse;
+import io.javalin.http.staticfiles.Location;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.Executors;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 /**
- * Servidor central do CertiManager (porta 8888).
+ * Servidor central do CertiManager (porta 8888): banco SQLite, login, gestao de certificados e
+ * usuarios, importacao em lote, backup/restore, robo diario de e-mail, proxy de CNPJ, distribuicao
+ * de novas versoes do AgenteTerminal, e hospedagem dos arquivos estaticos do Front-end.
  *
- * Este modulo cobre, por enquanto, apenas a distribuicao de novas versoes do AgenteTerminal
- * (o que os terminais consultam para se auto-atualizar): publicar um .jar novo em `releases/`
- * e ele passa a ser servido automaticamente. O restante do ServidorLocal descrito no README
- * (banco SQLite, robo de e-mails, hospedagem do Front-end) ainda esta por implementar.
+ * O comportamento replica o protipo `Front-end/docs/server.ts` (Node/Express), que NAO e o backend
+ * real deste projeto — serviu apenas como referencia do contrato de API que o front-end espera.
  */
 public class ServidorLocal {
 
     public static final int PORTA = 8888;
 
-    private static final Gson GSON = new Gson();
-    private static final Pattern NOME_ARQUIVO_VALIDO = Pattern.compile("AgenteTerminal-\\d+\\.\\d+\\.\\d+\\.jar");
+    private static final Set<String> PREFIXOS_ROTAS_PUBLICAS = Set.of(
+            "/api/login", "/api/cnpj/", "/api/agente/versao");
 
     public static void main(String[] args) throws IOException {
-        Path pastaReleases = Path.of(System.getenv().getOrDefault("CERTIMANAGER_RELEASES_DIR", "releases"))
-                .toAbsolutePath()
-                .normalize();
+        Path pastaReleases = pastaDe("CERTIMANAGER_RELEASES_DIR", "releases");
+        Path pastaBackups = pastaDe("CERTIMANAGER_BACKUPS_DIR", "backups");
+        Path arquivoDb = Path.of(System.getenv().getOrDefault("CERTIMANAGER_DB_PATH", "database.sqlite"));
+        Path pastaFrontend = pastaDe("CERTIMANAGER_FRONTEND_DIST_DIR", "frontend-dist");
+
         Files.createDirectories(pastaReleases);
+        Files.createDirectories(pastaBackups);
 
-        RepositorioReleases repositorio = new RepositorioReleases(pastaReleases);
-
-        HttpServer servidor = HttpServer.create(new InetSocketAddress(PORTA), 0);
-        servidor.createContext("/api/agente/versao", exchange -> tratarVersaoAgente(exchange, repositorio));
-        servidor.createContext("/downloads/", exchange -> tratarDownload(exchange, pastaReleases));
-        servidor.setExecutor(Executors.newFixedThreadPool(4));
-        servidor.start();
-
-        System.out.println("ServidorLocal ouvindo em http://localhost:" + PORTA);
-        System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases);
-    }
-
-    private static void tratarVersaoAgente(HttpExchange exchange, RepositorioReleases repositorio) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            exchange.close();
-            return;
+        Banco banco;
+        try {
+            banco = new Banco(arquivoDb.toString());
+            Esquema.inicializar(banco);
+        } catch (Exception e) {
+            throw new IOException("Falha ao inicializar o banco de dados em " + arquivoDb, e);
         }
 
-        try {
-            Optional<VersaoPublicada> versao = repositorio.versaoMaisRecente();
-            if (versao.isEmpty()) {
-                responder(exchange, 404, GSON.toJson(Map.of(
-                        "erro", "Nenhuma versao do AgenteTerminal publicada ainda em releases/."
-                )));
+        Jwt jwt = new Jwt(ChaveSecreta.resolver(arquivoDb.resolveSibling("jwt-secret.key")));
+        Auditoria auditoria = new Auditoria(banco);
+
+        Banco bancoFinal = banco;
+        Javalin app = Javalin.create(cfg -> {
+            if (Files.isDirectory(pastaFrontend)) {
+                cfg.staticFiles.add(sf -> {
+                    sf.directory = pastaFrontend.toAbsolutePath().toString();
+                    sf.location = Location.EXTERNAL;
+                });
+            } else {
+                System.out.println("Aviso: pasta do Front-end (" + pastaFrontend + ") nao encontrada."
+                        + " Rode 'npm run build' no Front-end e copie o resultado para la, ou aponte"
+                        + " CERTIMANAGER_FRONTEND_DIST_DIR. A API continua funcionando normalmente.");
+            }
+
+            RoutesConfig routes = cfg.routes;
+            configurarCors(routes);
+            configurarAutenticacao(routes, jwt);
+            configurarTratamentoDeErros(routes);
+
+            AutenticacaoRotas.registrar(routes, bancoFinal, jwt);
+            CertificadosRotas.registrar(routes, bancoFinal, auditoria);
+            UsuariosRotas.registrar(routes, bancoFinal, auditoria);
+            LogsRotas.registrar(routes, bancoFinal);
+            ImportacaoRotas.registrar(routes, bancoFinal, auditoria);
+            ManutencaoRotas.registrar(routes, bancoFinal, auditoria, pastaBackups);
+            CnpjRotas.registrar(routes);
+            ConfigEmailRotas.registrar(routes, bancoFinal);
+            AgenteRotas.registrar(routes, pastaReleases);
+        });
+
+        new RoboEmail(banco).iniciarAgendamento();
+
+        app.start(PORTA);
+        System.out.println("ServidorLocal ouvindo em http://localhost:" + PORTA);
+        System.out.println("Banco de dados: " + arquivoDb.toAbsolutePath());
+        System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases.toAbsolutePath());
+    }
+
+    private static void configurarCors(RoutesConfig routes) {
+        routes.before(ctx -> ctx.header("Access-Control-Allow-Origin", "*"));
+        routes.before(ctx -> ctx.header("Access-Control-Allow-Headers", "Content-Type, Authorization"));
+        routes.before(ctx -> ctx.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"));
+        routes.options("/*", ctx -> ctx.status(204));
+    }
+
+    private static void configurarAutenticacao(RoutesConfig routes, Jwt jwt) {
+        routes.before("/api/*", ctx -> {
+            if (ctx.method() == io.javalin.http.HandlerType.OPTIONS) {
+                return; // preflight de CORS: o navegador nunca manda Authorization nele
+            }
+
+            boolean rotaPublica = PREFIXOS_ROTAS_PUBLICAS.stream().anyMatch(prefixo -> ctx.path().startsWith(prefixo));
+            if (rotaPublica) {
                 return;
             }
 
-            VersaoPublicada publicada = versao.get();
-            String hash = repositorio.sha256De(publicada.arquivo());
-            String host = exchange.getRequestHeaders().getFirst("Host");
-            if (host == null || host.isBlank()) {
-                host = "localhost:" + PORTA;
+            String cabecalho = ctx.header("Authorization");
+            String token = (cabecalho != null && cabecalho.startsWith("Bearer ")) ? cabecalho.substring(7) : null;
+            if (token == null) {
+                throw new UnauthorizedResponse("Unauthorized");
             }
-            String url = "http://" + host + "/downloads/" + publicada.arquivo().getFileName();
 
-            responder(exchange, 200, GSON.toJson(Map.of(
-                    "versao", publicada.versao(),
-                    "url", url,
-                    "sha256", hash
-            )));
-        } catch (Exception e) {
-            responder(exchange, 500, GSON.toJson(Map.of(
-                    "erro", "Falha ao consultar a versao publicada do AgenteTerminal.",
-                    "detalhe", String.valueOf(e.getMessage())
-            )));
-        }
+            Sessao sessao = jwt.verificar(token).orElseThrow(() -> new UnauthorizedResponse("Invalid token"));
+            AuthContexto.definir(ctx, sessao);
+        });
     }
 
-    private static void tratarDownload(HttpExchange exchange, Path pastaReleases) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
-            exchange.sendResponseHeaders(405, -1);
-            exchange.close();
-            return;
-        }
-
-        String caminho = exchange.getRequestURI().getPath();
-        String prefixo = "/downloads/";
-        String nomeArquivo = caminho.startsWith(prefixo) ? caminho.substring(prefixo.length()) : "";
-
-        if (!NOME_ARQUIVO_VALIDO.matcher(nomeArquivo).matches()) {
-            exchange.sendResponseHeaders(400, -1);
-            exchange.close();
-            return;
-        }
-
-        Path arquivo = pastaReleases.resolve(nomeArquivo).normalize();
-        if (!arquivo.startsWith(pastaReleases) || !Files.isRegularFile(arquivo)) {
-            exchange.sendResponseHeaders(404, -1);
-            exchange.close();
-            return;
-        }
-
-        exchange.getResponseHeaders().add("Content-Type", "application/java-archive");
-        exchange.sendResponseHeaders(200, Files.size(arquivo));
-        try (var saida = exchange.getResponseBody()) {
-            Files.copy(arquivo, saida);
-        }
+    private static void configurarTratamentoDeErros(RoutesConfig routes) {
+        routes.exception(UnauthorizedResponse.class, (e, ctx) -> ctx.status(401).json(Map.of("error", e.getMessage())));
+        routes.exception(ForbiddenResponse.class, (e, ctx) -> ctx.status(403).json(Map.of("error", e.getMessage())));
+        routes.exception(BadRequestResponse.class, (e, ctx) -> ctx.status(400).json(Map.of("error", e.getMessage())));
+        routes.exception(NotFoundResponse.class, (e, ctx) -> ctx.status(404).json(Map.of("error", "Nao encontrado")));
+        routes.exception(Exception.class, (e, ctx) -> {
+            e.printStackTrace();
+            ctx.status(500).json(Map.of("error", String.valueOf(e.getMessage())));
+        });
     }
 
-    private static void responder(HttpExchange exchange, int codigoStatus, String corpoJson) throws IOException {
-        byte[] bytes = corpoJson.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
-        exchange.sendResponseHeaders(codigoStatus, bytes.length);
-        try (var saida = exchange.getResponseBody()) {
-            saida.write(bytes);
-        }
+    private static Path pastaDe(String variavelDeAmbiente, String padrao) {
+        return Path.of(System.getenv().getOrDefault(variavelDeAmbiente, padrao)).toAbsolutePath().normalize();
     }
 }

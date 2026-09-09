@@ -35,8 +35,10 @@ O **CertiManager** é um sistema completo e inteligente para gestão de Certific
 **Back-end:**
 * [Java 21+](https://www.oracle.com/java/)
 * [Javalin](https://javalin.io/) (Framework Web leve e rápido)
-* [SQLite](https://www.sqlite.org/index.html) (Banco de Dados embutido)
-* Biblioteca `java.security` (Para leitura do cofre MSCAPI do Windows)
+* [SQLite](https://www.sqlite.org/index.html) via [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) (Banco de Dados embutido, sem ORM)
+* [Jakarta Mail](https://eclipse-ee4j.github.io/mail/) (Robô de e-mail via SMTP)
+* Biblioteca `java.security` (Para leitura do cofre MSCAPI do Windows e para abrir arquivos `.pfx`/`.p12` na importação em lote)
+* JWT e hash de senha (PBKDF2) implementados sem dependências externas, só com a biblioteca padrão do JDK
 
 ---
 
@@ -87,14 +89,30 @@ Veja as seções [Compilando o Servidor Central](#2-compilando-o-servidor-centra
 
 ### 2. Compilando o Servidor Central
 
-O código-fonte fica em `Back-end/ServidorLocal`. **Por enquanto**, este módulo cobre apenas a distribuição de novas versões do `AgenteTerminal` (o endpoint que os terminais consultam para se auto-atualizar); o restante do Servidor Central descrito na arquitetura (banco SQLite, robô de e-mails, hospedagem do Front-end) ainda está por implementar.
+O código-fonte fica em `Back-end/ServidorLocal` ([Javalin](https://javalin.io/) + SQLite puro via JDBC, sem ORM). Ele cobre tudo que o Front-end espera da API: login/autenticação (JWT), CRUD de certificados, gestão de usuários e níveis de acesso, logs de auditoria, importação em lote de `.pfx`/`.p12` e de planilha de e-mails, limpeza de duplicatas vencidas, backup/restore via `.sql`, proxy de CNPJ (ReceitaWS), robô diário de e-mail e a distribuição de versões do `AgenteTerminal`, além de hospedar os arquivos estáticos do Front-end.
+
+> Existe um `Front-end/docs/server.ts` em Node/Express que implementa boa parte dessas mesmas funcionalidades — ele **não é o backend real do projeto** (roda numa porta diferente, 3000, e nunca foi ligado à arquitetura de terminal+servidor descrita acima). Serviu apenas como referência do contrato de API ao escrever o `ServidorLocal` em Java; o backend que efetivamente roda em produção é o Java.
 
 ```bash
 cd Back-end/ServidorLocal
 mvn package
 java -jar target/ServidorLocal.jar
 ```
-Isso sobe o servidor na porta `8888` e cria a pasta `releases/`, onde você publica novas versões do `AgenteTerminal.jar` (veja a seção de arquitetura acima).
+Isso sobe o servidor na porta `8888`, cria o banco `database.sqlite` (na primeira execução) e as pastas `releases/` e `backups/`.
+
+**Usuário administrador padrão** (criado automaticamente na primeira execução, caso ainda não exista nenhum usuário com esse e-mail): `admin@admin.com` / `admin123`. **Troque essa senha assim que possível** — use o próprio sistema (Gestão de Acessos) para criar um administrador novo e remover ou trocar a senha do padrão.
+
+**Variáveis de ambiente opcionais:**
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `CERTIMANAGER_DB_PATH` | `database.sqlite` | Caminho do arquivo do banco SQLite |
+| `CERTIMANAGER_JWT_SECRET` | *(gerado automaticamente)* | Segredo usado para assinar os tokens de login. Se não definido, um segredo aleatório é gerado e salvo em `jwt-secret.key` na primeira execução |
+| `CERTIMANAGER_RELEASES_DIR` | `releases` | Pasta onde publicar novas versões do `AgenteTerminal.jar` |
+| `CERTIMANAGER_BACKUPS_DIR` | `backups` | Pasta onde os backups gerados pelo sistema são salvos |
+| `CERTIMANAGER_FRONTEND_DIST_DIR` | `frontend-dist` | Pasta com o build do Front-end (`npm run build` gera em `Front-end/docs/dist`; copie o conteúdo para cá, ou aponte a variável para lá) a ser servida em `/` |
+
+O robô de e-mail (envio diário de avisos de vencimento) só começa a funcionar depois de configurado pela tela "Servidor de E-mails (Robô)" no sistema — ele usa uma conta do Gmail com [senha de aplicativo](https://myaccount.google.com/apppasswords), não a senha normal da conta.
 
 ### 3. Compilando e Instalando o AgenteTerminal (em cada terminal)
 

@@ -1,3 +1,9 @@
 target/
 dependency-reduced-pom.xml
 releases/*.jar
+backups/*.sql
+frontend-dist/
+database.sqlite
+database.sqlite-wal
+database.sqlite-shm
+jwt-secret.key
