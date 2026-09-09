@@ -65,6 +65,7 @@ public class ServidorLocal {
 
         Jwt jwt = new Jwt(ChaveSecreta.resolver(arquivoDb.resolveSibling("jwt-secret.key")));
         Auditoria auditoria = new Auditoria(banco);
+        RoboEmail roboEmail = new RoboEmail(banco);
 
         Banco bancoFinal = banco;
         Javalin app = Javalin.create(cfg -> {
@@ -91,11 +92,11 @@ public class ServidorLocal {
             ImportacaoRotas.registrar(routes, bancoFinal, auditoria);
             ManutencaoRotas.registrar(routes, bancoFinal, auditoria, pastaBackups);
             CnpjRotas.registrar(routes);
-            ConfigEmailRotas.registrar(routes, bancoFinal);
+            ConfigEmailRotas.registrar(routes, bancoFinal, roboEmail);
             AgenteRotas.registrar(routes, pastaReleases);
         });
 
-        new RoboEmail(banco).iniciarAgendamento();
+        roboEmail.iniciarAgendamento();
 
         app.start(PORTA);
         System.out.println("ServidorLocal ouvindo em http://localhost:" + PORTA);
