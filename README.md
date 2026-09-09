@@ -114,6 +114,16 @@ Isso sobe o servidor na porta `8888`, cria o banco `database.sqlite` (na primeir
 
 O robô de e-mail (envio diário de avisos de vencimento) só começa a funcionar depois de configurado pela tela "Servidor de E-mails (Robô)" no sistema — ele usa uma conta do Gmail com [senha de aplicativo](https://myaccount.google.com/apppasswords), não a senha normal da conta.
 
+#### Migrando de uma instalação antiga do CertiManager
+
+Se você já tem uma instalação anterior do CertiManager (schema com tabelas `usuarios`/`certificados`/`logs`/`configuracoes_email` em português, senhas em texto puro), existe uma ferramenta de migração única que converte esse banco para o formato novo, re-hasheando as senhas com PBKDF2 (a senha que o usuário já usa continua funcionando):
+
+```bash
+java -cp target/ServidorLocal.jar com.certimanager.servidor.ferramentas.MigradorBancoAntigo <banco-antigo.db> <database.sqlite-novo>
+```
+
+**Sempre rode contra uma cópia do banco antigo, nunca no arquivo original em produção.** Depois de gerar o `database.sqlite`, suba o `ServidorLocal` apontando `CERTIMANAGER_DB_PATH` para ele (num ambiente de teste primeiro) e confira o login e os dados antes de colocar em produção.
+
 ### 3. Compilando e Instalando o AgenteTerminal (em cada terminal)
 
 O código-fonte fica em `Back-end/AgenteTerminal`.
