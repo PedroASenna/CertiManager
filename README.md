@@ -105,7 +105,7 @@ Instale as três ferramentas abaixo, **nessa ordem**, e confirme cada uma antes 
 
 Se você tem o `git` instalado, clone o repositório:
 ```
-git clone <url-do-repositorio>
+git clone https://github.com/PedroASenna/CertiManager.git
 ```
 Sem `git`, baixe o `.zip` do repositório (botão "Code" → "Download ZIP" no GitHub) e extraia. A diferença importa depois: só quem clonou com `git` consegue rodar `git pull` pra buscar atualizações; quem baixou o `.zip` precisa baixar um `.zip` novo a cada atualização.
 
