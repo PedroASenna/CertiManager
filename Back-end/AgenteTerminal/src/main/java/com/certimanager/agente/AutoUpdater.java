@@ -125,7 +125,7 @@ public final class AutoUpdater {
                 .GET()
                 .build();
         HttpResponse<Path> resposta = CLIENTE_HTTP.send(requisicao, HttpResponse.BodyHandlers.ofFile(
-                destino, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING));
+                destino, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING));
         if (resposta.statusCode() != 200) {
             Files.deleteIfExists(destino);
             throw new IOException("Download da atualizacao falhou com HTTP " + resposta.statusCode());
