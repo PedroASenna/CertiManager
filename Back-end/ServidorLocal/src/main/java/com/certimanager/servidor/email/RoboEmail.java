@@ -51,39 +51,44 @@ public final class RoboEmail {
 
     private void executarComSeguranca() {
         try {
-            executar();
+            executarAgora();
         } catch (Exception e) {
             System.err.println("[RoboEmail] Falha ao executar rotina diaria: " + e.getMessage());
         }
     }
 
-    private void executar() throws SQLException {
+    /**
+     * Roda a rotina de avisos imediatamente (usado tanto pelo agendamento diario quanto pelo
+     * botao "Disparar Alertas de E-mail Imediatamente" na tela de configuracao). Ao contrario da
+     * chamada agendada, aqui as excecoes sobem para quem chamou poder mostrar o erro ao usuario.
+     */
+    public String executarAgora() throws SQLException, MessagingException {
         Map<String, Object> config = banco.consultarUm("SELECT * FROM config_email WHERE id = 1");
         if (config == null || vazio(config.get("email_remetente")) || vazio(config.get("senha_app"))) {
-            return; // robo ainda nao foi configurado em Configurar Robo de E-mail
+            throw new IllegalStateException("Configure o robo de e-mail (conta do Gmail e senha de aplicativo) antes de disparar.");
         }
 
         List<Map<String, Object>> vencendo = banco.consultar(
                 "SELECT * FROM certificados WHERE expiry_date <= date('now', '+" + DIAS_DE_ANTECEDENCIA + " days')");
         if (vencendo.isEmpty()) {
-            return;
+            return "Nenhum certificado vencendo nos proximos " + DIAS_DE_ANTECEDENCIA + " dias. Nenhum e-mail foi enviado.";
         }
 
         String modo = String.valueOf(config.get("modo_disparo"));
-        try {
-            if ("CLIENTE".equals(modo)) {
-                for (Map<String, Object> cert : vencendo) {
-                    String emailCliente = (String) cert.get("email_cliente");
-                    if (!vazio(emailCliente)) {
-                        enviarLembreteCliente(config, cert, emailCliente);
-                    }
+        if ("CLIENTE".equals(modo)) {
+            int enviados = 0;
+            for (Map<String, Object> cert : vencendo) {
+                String emailCliente = (String) cert.get("email_cliente");
+                if (!vazio(emailCliente)) {
+                    enviarLembreteCliente(config, cert, emailCliente);
+                    enviados++;
                 }
-            } else {
-                enviarResumoEquipe(config, vencendo);
             }
-        } catch (MessagingException e) {
-            System.err.println("[RoboEmail] Falha ao enviar e-mail: " + e.getMessage());
+            return enviados + " lembrete(s) enviado(s) para cliente(s) com e-mail cadastrado.";
         }
+
+        enviarResumoEquipe(config, vencendo);
+        return "Resumo enviado para a equipe (" + vencendo.size() + " certificado(s) vencendo ou vencido(s)).";
     }
 
     private void enviarResumoEquipe(Map<String, Object> config, List<Map<String, Object>> vencendo) throws MessagingException {
@@ -121,6 +126,10 @@ public final class RoboEmail {
         propriedades.put("mail.smtp.starttls.enable", "true");
         propriedades.put("mail.smtp.host", "smtp.gmail.com");
         propriedades.put("mail.smtp.port", "587");
+        // Sem isso, um problema de rede trava a chamada (e a tela de "Disparar Teste") para sempre.
+        propriedades.put("mail.smtp.connectiontimeout", "10000");
+        propriedades.put("mail.smtp.timeout", "10000");
+        propriedades.put("mail.smtp.writetimeout", "10000");
 
         Session sessao = Session.getInstance(propriedades, new Authenticator() {
             @Override
