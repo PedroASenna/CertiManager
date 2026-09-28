@@ -63,7 +63,7 @@ Architecture: amd64
 Maintainer: Pedro Sena & Kaio Rodrigues
 Installed-Size: $TAMANHO_KB
 Depends: libc6, zlib1g, libx11-6, libxext6, libxrender1, libxtst6, libxi6, libfreetype6, libfontconfig1, xdg-utils
-Recommends: gnome-shell-extension-appindicator
+Suggests: gnome-shell-extension-appindicator
 Description: CertiManager - gestao de certificados digitais (servidor)
  Servidor local do CertiManager (porta 8888) com banco de dados, robo de
  e-mail e a interface web. Inicia junto com a sessao do usuario, em segundo
