@@ -6,11 +6,16 @@ import com.certimanager.servidor.db.Auditoria;
 import com.certimanager.servidor.db.Banco;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.BadRequestResponse;
+import io.javalin.http.NotFoundResponse;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public final class CertificadosRotas {
+
+    private static final List<String> CAMPOS_EDITAVEIS = List.of(
+            "client_name", "doc_number", "expiry_date", "issue_date", "type", "password", "email_cliente");
 
     private CertificadosRotas() {
     }
@@ -52,15 +57,27 @@ public final class CertificadosRotas {
             long id = Long.parseLong(ctx.pathParam("id"));
             Map<?, ?> corpo = ctx.bodyAsClass(Map.class);
 
-            banco.executar("""
-                    UPDATE certificados
-                    SET client_name = ?, doc_number = ?, expiry_date = ?, issue_date = ?, type = ?, password = ?, email_cliente = ?
-                    WHERE id = ?
-                    """,
-                    textoOuVazio(corpo, "client_name"), textoOuVazio(corpo, "doc_number"),
-                    textoOuVazio(corpo, "expiry_date"), textoOuVazio(corpo, "issue_date"),
-                    textoOuVazio(corpo, "type"), textoOuVazio(corpo, "password"),
-                    textoOuVazio(corpo, "email_cliente"), id);
+            // So atualiza os campos enviados: a tela de renovacao manda apenas a nova data, e
+            // sobrescrever o resto com vazio apagava nome, documento e senha do certificado.
+            List<String> atribuicoes = new ArrayList<>();
+            List<Object> valores = new ArrayList<>();
+            for (String campo : CAMPOS_EDITAVEIS) {
+                if (corpo.containsKey(campo)) {
+                    atribuicoes.add(campo + " = ?");
+                    valores.add(textoOuVazio(corpo, campo));
+                }
+            }
+            if (atribuicoes.isEmpty()) {
+                throw new BadRequestResponse("Nenhum campo para atualizar");
+            }
+            valores.add(id);
+
+            int alterados = banco.executar(
+                    "UPDATE certificados SET " + String.join(", ", atribuicoes) + " WHERE id = ?",
+                    valores.toArray());
+            if (alterados == 0) {
+                throw new NotFoundResponse();
+            }
 
             Sessao sessao = AuthContexto.atual(ctx);
             auditoria.registrar(sessao.email(), "Editou o certificado ID " + id);

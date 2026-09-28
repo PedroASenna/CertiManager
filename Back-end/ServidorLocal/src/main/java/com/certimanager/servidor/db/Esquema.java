@@ -15,6 +15,11 @@ public final class Esquema {
     }
 
     public static void inicializar(Banco banco) throws SQLException {
+        inicializar(banco, EMAIL_ADMIN_PADRAO, SENHA_ADMIN_PADRAO);
+    }
+
+    /** O admin inicial so e criado num banco sem nenhum usuario (instalacao nova). */
+    public static void inicializar(Banco banco, String emailAdminInicial, String senhaAdminInicial) throws SQLException {
         try (Statement st = banco.bruta().createStatement()) {
             st.execute("""
                     CREATE TABLE IF NOT EXISTS usuarios (
@@ -56,11 +61,11 @@ public final class Esquema {
                     """);
         }
 
-        Object existeAdmin = banco.consultarUm("SELECT id FROM usuarios WHERE email = ?", EMAIL_ADMIN_PADRAO);
-        if (existeAdmin == null) {
+        Object algumUsuario = banco.consultarUm("SELECT id FROM usuarios LIMIT 1");
+        if (algumUsuario == null) {
             banco.executar(
                     "INSERT INTO usuarios (email, senha_hash, role) VALUES (?, ?, ?)",
-                    EMAIL_ADMIN_PADRAO, Senhas.gerarHash(SENHA_ADMIN_PADRAO), 2
+                    emailAdminInicial, Senhas.gerarHash(senhaAdminInicial), 2
             );
         }
     }
