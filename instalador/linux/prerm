@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+# Para o servidor antes de remover/atualizar os arquivos. Os dados de cada usuario ficam em
+# ~/.local/share/certimanager e NAO sao apagados.
+pkill -f '^/opt/certimanager/bin/CertiManager( |$)' >/dev/null 2>&1 || true
+
+exit 0

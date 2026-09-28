@@ -69,6 +69,65 @@ Veja as seções [Compilando o Servidor Central](#3-compilando-o-servidor-centra
 
 ---
 
+## 📦 Instalação pelo instalador (recomendado)
+
+Na página de [Releases](https://github.com/PedroASenna/CertiManager/releases) do GitHub ficam os instaladores prontos, **já com o Java embutido** (não precisa instalar Java, Node nem Maven para usar):
+
+| Sistema | Arquivo |
+|---|---|
+| Windows (64 bits) | `CertiManager-Setup-<versão>.exe` |
+| Linux (Debian/Ubuntu, 64 bits) | `certimanager_<versão>_amd64.deb` |
+
+O servidor instalado roda **em segundo plano, sem janela nenhuma**, e aparece como um ícone (escudo azul) na **bandeja do sistema**, perto do relógio. Pelo ícone:
+- **clique duplo** ou **Abrir CertiManager** → abre o sistema no navegador;
+- **Abrir pasta de dados** → abre a pasta com o banco, os logs e os backups;
+- **Encerrar servidor** → desliga o servidor (pede confirmação, porque os outros computadores perdem o acesso).
+
+O atalho "CertiManager" da área de trabalho/menu iniciar abre o sistema no navegador e, se o servidor estiver parado, liga ele antes. Abrir o atalho com o servidor já rodando não cria um segundo servidor.
+
+### Windows
+
+1. Baixe e execute o `CertiManager-Setup-<versão>.exe` (pede permissão de administrador).
+2. Aceite os termos, confirme a pasta (padrão `C:\CertiManager`) e escolha o modo:
+   - **SERVIDOR** (o computador principal, ex: `192.168.100.4`): escolha as pastas de backup/relatórios e defina o **e-mail e a senha do administrador** — esse será o primeiro login do sistema. Deixe marcada a opção de iniciar com o Windows.
+   - **TERMINAL** (os outros computadores): informe o IP do servidor. Ele só cria um atalho que abre `http://<ip-do-servidor>:8888` no navegador.
+3. No servidor, o instalador também libera a porta `8888` no Firewall do Windows.
+
+**Atualizando** (inclusive uma instalação antiga, do tempo do `iniciar.bat`): rode o instalador novo por cima, na mesma pasta. Ele encerra o servidor que estiver rodando, troca só os arquivos do programa e **mantém o `database.sqlite`, o `config.ini`, os backups e os logs**. Como o banco já existe, a tela do administrador não aparece. O `iniciar.bat` e os atalhos antigos que apontavam para ele são removidos (o `CertiManager.jar` e a pasta `public` antigos ficam na pasta, mas deixam de ser usados e podem ser apagados).
+
+Tudo fica em `C:\CertiManager`: `database.sqlite` (banco), `config.ini`, `logs\servidor.log` (o que antes aparecia no terminal), `Backups\` e o programa em si (`CertiManager.exe`, `app\` e `runtime\`).
+
+> O servidor inicia quando alguém **faz login** no Windows do servidor (atalho na pasta de Inicialização de todos os usuários), porque o ícone da bandeja só existe dentro de uma sessão. Num servidor que reinicia sozinho (ex: atualização do Windows de madrugada), configure o login automático do Windows ou deixe a sessão aberta.
+
+### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt install ./certimanager_<versão>_amd64.deb
+```
+Depois, abra **CertiManager** pelo menu de aplicativos. Nas próximas vezes o servidor inicia sozinho no login, em segundo plano, com o ícone na bandeja.
+
+- Os dados ficam na pasta do usuário que roda o servidor: `~/.local/share/certimanager` (banco, `logs/servidor.log`, `backups/`). Use sempre o mesmo usuário para o servidor.
+- No **GNOME** (Ubuntu padrão já vem com ela ativa), o ícone da bandeja precisa da extensão *AppIndicator and KStatusNotifierItem Support* (`gnome-shell-extension-appindicator`). KDE, XFCE, Cinnamon e MATE mostram o ícone sem nada extra. Sem bandeja, o servidor funciona normalmente, só sem o ícone.
+- Se o firewall `ufw` estiver ativo, a porta `8888` é liberada na instalação.
+- Para desinstalar: `sudo apt remove certimanager` (os dados em `~/.local/share/certimanager` não são apagados).
+
+### Gerando os instaladores (para quem mantém o projeto)
+
+Os instaladores são gerados pelo GitHub Actions (`.github/workflows/instaladores.yml`):
+- Em todo **pull request** que mexe no servidor, no Front-end ou em `instalador/`, o `.exe` e o `.deb` são gerados e ficam para download na aba **Actions** → execução → *Artifacts* (bom para testar antes de publicar).
+- Para **publicar uma versão**, crie e envie uma tag `v<versão>`:
+  ```bash
+  git tag v1.1.0
+  git push origin v1.1.0
+  ```
+  O workflow gera os dois instaladores e cria a Release com eles anexados.
+
+Os instaladores empacotam o Front-end **a partir do código deste repositório** (`Front-end/docs`). Antes de publicar uma versão, confirme que o código do Front-end aqui está atualizado com o que está em uso — senão a versão publicada volta a tela antiga.
+
+Para gerar localmente: `./instalador/linux/empacotar.sh 1.1.0` (Linux, precisa de JDK 21, Maven, Node e `dpkg-deb`) ou `.\instalador\windows\empacotar.ps1 -Versao 1.1.0` (Windows, precisa de JDK 21, Maven, Node e [Inno Setup 6](https://jrsoftware.org/isdl.php)). O resultado vai para `build/saida/`. Para usar outro ícone, substitua `instalador/icones/certimanager.ico` (Windows) e `certimanager.png` (Linux e bandeja: `Back-end/ServidorLocal/src/main/resources/icone-bandeja.png`).
+
+---
+
 ## 🚀 Como Instalar e Compilar
 
 Esse guia assume Windows (é o ambiente mais comum para esse tipo de instalação em escritório), mas os comandos de `npm`/`mvn`/`java` são os mesmos em qualquer sistema — só muda como você abre o terminal e instala os pré-requisitos.
@@ -154,17 +213,26 @@ Isso sobe o servidor na porta `8888`, cria o banco `database.sqlite` (na primeir
 
 > Se aparecer só o texto `{"error":"Nao encontrado"}` em vez da tela de login, é porque o servidor não achou a pasta `frontend-dist` (confira o aviso que aparece no terminal ao iniciar — ele avisa se não achou) — volte no passo (b).
 
-**Usuário administrador padrão** (criado automaticamente na primeira execução, caso ainda não exista nenhum usuário com esse e-mail): `admin@admin.com` / `admin123`. **Troque essa senha assim que possível** — use o próprio sistema (Gestão de Acessos) para criar um administrador novo e remover ou trocar a senha do padrão.
+**Usuário administrador inicial:** criado só quando o banco ainda **não tem nenhum usuário** (instalação nova). Se existir um `config.ini` com `Login=` e `Senha=` (gerado pelo instalador do Windows), é esse o admin criado — e a linha `Senha=` é apagada do `config.ini` logo em seguida, para a senha não ficar em texto puro no disco. Sem `config.ini`, o padrão é `admin@admin.com` / `admin123`: **troque essa senha assim que possível** — use o próprio sistema (Gestão de Acessos) para criar um administrador novo e remover o padrão.
+
+> Versões anteriores recriavam o `admin@admin.com` / `admin123` sempre que ele não existisse, **mesmo num banco migrado com outros usuários**. Se o seu servidor passou por essas versões, entre em Gestão de Acessos e remova o `admin@admin.com` (ou troque a senha dele).
 
 **Variáveis de ambiente opcionais:**
 
+Os caminhos relativos são resolvidos a partir da pasta base (`CERTIMANAGER_HOME`, ou a pasta atual se ela não for definida). Os instaladores já configuram tudo isso sozinhos.
+
 | Variável | Padrão | Descrição |
 |---|---|---|
+| `CERTIMANAGER_HOME` | *(pasta atual)* | Pasta base dos dados: banco, `config.ini`, `logs/`, `backups/`, `releases/` |
 | `CERTIMANAGER_DB_PATH` | `database.sqlite` | Caminho do arquivo do banco SQLite |
 | `CERTIMANAGER_JWT_SECRET` | *(gerado automaticamente)* | Segredo usado para assinar os tokens de login. Se não definido, um segredo aleatório é gerado e salvo em `jwt-secret.key` na primeira execução |
 | `CERTIMANAGER_RELEASES_DIR` | `releases` | Pasta onde publicar novas versões do `AgenteTerminal.jar` |
-| `CERTIMANAGER_BACKUPS_DIR` | `backups` | Pasta onde os backups gerados pelo sistema são salvos |
+| `CERTIMANAGER_BACKUPS_DIR` | `PastaBackup` do `config.ini`, senão `backups` | Pasta onde os backups gerados pelo sistema são salvos. Se ela não puder ser criada (ex: disco removido), o servidor usa `backups` na pasta base |
 | `CERTIMANAGER_FRONTEND_DIST_DIR` | `frontend-dist` | Pasta com o build do Front-end a ser servida em `/` (veja o passo b acima) |
+| `CERTIMANAGER_LOG_EM_ARQUIVO` | `false` | `true` grava a saída em `logs/servidor.log` em vez do terminal (os instaladores ligam isso) |
+| `CERTIMANAGER_BANDEJA` | `true` | `false` não mostra o ícone na bandeja do sistema |
+
+Rodando pelo `java -jar`, o servidor também mostra o ícone na bandeja (quando há interface gráfica). Com o argumento `--abrir-navegador`, ele abre o sistema no navegador depois de subir.
 
 Pra definir uma variável de ambiente só para aquela execução, no PowerShell/cmd, antes do `java -jar`:
 ```
@@ -220,6 +288,8 @@ Para desinstalar de um terminal, use `desinstalar-servico.ps1` (também como Adm
 
 ## ▶️ Iniciando o Servidor Central automaticamente com o Windows
 
+> Quem instalou pelo [instalador](#-instalação-pelo-instalador-recomendado) não precisa disso: ele já cria o atalho de inicialização. Esta seção é para quem roda o `ServidorLocal.jar` compilado à mão.
+
 Um jeito simples de deixar o `ServidorLocal` rodando sozinho é um arquivo `.bat` (coloque na pasta do jar, e um atalho dele na pasta de Inicialização do Windows — `shell:startup` na barra de endereços do Explorador):
 
 ```bat
@@ -251,6 +321,12 @@ Uma coleção dos erros mais frequentes ao instalar, com a causa e a solução d
 
 **A tela mostra só o texto `{"error":"Nao encontrado"}`**
 → O `ServidorLocal` não achou a pasta do Front-end. Confira o aviso impresso no terminal ao subir o servidor (ele avisa a pasta que procurou) e revise o passo 3b (copiar o `dist` para `frontend-dist`, ou apontar `CERTIMANAGER_FRONTEND_DIST_DIR`).
+
+**Mensagem "A porta 8888 já está em uso por outro programa" ao abrir o CertiManager**
+→ Quase sempre é uma versão antiga ainda aberta pelo `iniciar.bat` (`javaw`). Encerre o `javaw.exe` no Gerenciador de Tarefas (ou siga o item abaixo) e abra o CertiManager de novo. O instalador novo já faz isso sozinho ao atualizar.
+
+**O ícone não aparece na bandeja**
+→ No Windows, ele pode estar escondido na setinha `^` ao lado do relógio (arraste-o para fora para deixá-lo sempre visível). No Linux com GNOME, veja a observação sobre a extensão AppIndicator na seção do instalador. Para confirmar se o servidor está rodando, abra `http://localhost:8888` e veja o `logs/servidor.log`.
 
 **`Port already in use` / `Address already in use: bind` ao rodar `java -jar`**
 → Já tem outro processo usando a porta 8888 (pode ser uma instância anterior que você esqueceu aberta). Descubra qual é e encerre:

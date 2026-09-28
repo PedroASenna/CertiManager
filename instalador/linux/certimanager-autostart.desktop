@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CertiManager (servidor)
+Comment=Inicia o servidor do CertiManager em segundo plano, com ícone na bandeja
+Exec=/opt/certimanager/bin/CertiManager
+Icon=certimanager
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5

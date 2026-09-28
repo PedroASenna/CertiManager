@@ -24,10 +24,23 @@ import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.staticfiles.Location;
+import io.javalin.util.JavalinBindException;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.net.BindException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 
@@ -43,25 +56,68 @@ public class ServidorLocal {
 
     public static final int PORTA = 8888;
 
-    private static final Set<String> PREFIXOS_ROTAS_PUBLICAS = Set.of(
-            "/api/login", "/api/cnpj/", "/api/agente/versao");
+    private static final String URL_LOCAL = "http://localhost:" + PORTA;
 
-    public static void main(String[] args) throws IOException {
-        Path pastaReleases = pastaDe("CERTIMANAGER_RELEASES_DIR", "releases");
-        Path pastaBackups = pastaDe("CERTIMANAGER_BACKUPS_DIR", "backups");
-        Path arquivoDb = Path.of(System.getenv().getOrDefault("CERTIMANAGER_DB_PATH", "database.sqlite"));
-        Path pastaFrontend = pastaDe("CERTIMANAGER_FRONTEND_DIST_DIR", "frontend-dist");
+    private static final Set<String> PREFIXOS_ROTAS_PUBLICAS = Set.of(
+            "/api/login", "/api/cnpj/", "/api/agente/versao", "/api/status");
+
+    /**
+     * Sem argumentos o servidor sobe em segundo plano (e assim que ele roda na inicializacao do
+     * sistema). Com --abrir-navegador, usado pelos atalhos da area de trabalho/menu, tambem abre o
+     * sistema no navegador; se o servidor ja estiver rodando, so abre o navegador e sai.
+     */
+    public static void main(String[] args) {
+        Configuracao config = Configuracao.carregar();
+        redirecionarLogParaArquivo(config.arquivoLog());
+        boolean abrirNavegador = Arrays.asList(args).contains("--abrir-navegador");
+
+        if (certiManagerJaEstaRodando()) {
+            System.out.println("O CertiManager ja esta rodando em " + URL_LOCAL + ".");
+            if (abrirNavegador) {
+                IconeBandeja.abrirNavegador(URL_LOCAL);
+            }
+            return;
+        }
+
+        try {
+            iniciar(config, abrirNavegador);
+        } catch (Exception e) {
+            e.printStackTrace();
+            IconeBandeja.mostrarErro(portaOcupada(e)
+                    ? "A porta " + PORTA + " j\u00e1 est\u00e1 em uso por outro programa, ent\u00e3o o CertiManager n\u00e3o p\u00f4de iniciar.\n"
+                            + "Se uma vers\u00e3o antiga do CertiManager (iniciar.bat / javaw) estiver aberta, encerre-a no\n"
+                            + "Gerenciador de Tarefas e abra o CertiManager de novo."
+                    : "N\u00e3o foi poss\u00edvel iniciar o servidor do CertiManager:\n" + e.getMessage()
+                            + (config.arquivoLog() == null ? "" : "\n\nDetalhes em " + config.arquivoLog()));
+            System.exit(1);
+        }
+    }
+
+    private static void iniciar(Configuracao config, boolean abrirNavegador) throws IOException {
+        Path pastaReleases = config.pastaReleases();
+        Path pastaBackups = pastaGravavel(config.pastaBackups(), config.pastaBase().resolve("backups"));
+        Path arquivoDb = config.arquivoBanco();
+        Path pastaFrontend = config.pastaFrontend();
 
         Files.createDirectories(pastaReleases);
-        Files.createDirectories(pastaBackups);
+        Files.createDirectories(arquivoDb.toAbsolutePath().getParent());
+        boolean primeiraExecucao = !Files.exists(arquivoDb);
+
+        // Numa instalacao nova, o admin e o que foi digitado no instalador (config.ini).
+        String login = config.loginAdminInicial();
+        String senha = config.senhaAdminInicial();
+        boolean adminDoInstalador = login != null && !login.isBlank() && senha != null && !senha.isBlank();
 
         Banco banco;
         try {
             banco = new Banco(arquivoDb.toString());
-            Esquema.inicializar(banco);
+            Esquema.inicializar(banco,
+                    adminDoInstalador ? login : Esquema.EMAIL_ADMIN_PADRAO,
+                    adminDoInstalador ? senha : Esquema.SENHA_ADMIN_PADRAO);
         } catch (Exception e) {
             throw new IOException("Falha ao inicializar o banco de dados em " + arquivoDb, e);
         }
+        config.removerSenhaDoConfigIni();
 
         Jwt jwt = new Jwt(ChaveSecreta.resolver(arquivoDb.resolveSibling("jwt-secret.key")));
         Auditoria auditoria = new Auditoria(banco);
@@ -85,6 +141,7 @@ public class ServidorLocal {
             configurarAutenticacao(routes, jwt);
             configurarTratamentoDeErros(routes);
 
+            routes.get("/api/status", ctx -> ctx.json(Map.of("aplicacao", "CertiManager", "status", "ok")));
             AutenticacaoRotas.registrar(routes, bancoFinal, jwt);
             CertificadosRotas.registrar(routes, bancoFinal, auditoria);
             UsuariosRotas.registrar(routes, bancoFinal, auditoria);
@@ -96,12 +153,28 @@ public class ServidorLocal {
             AgenteRotas.registrar(routes, pastaReleases);
         });
 
+        app.start(PORTA);
         roboEmail.iniciarAgendamento();
 
-        app.start(PORTA);
-        System.out.println("ServidorLocal ouvindo em http://localhost:" + PORTA);
-        System.out.println("Banco de dados: " + arquivoDb.toAbsolutePath());
-        System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases.toAbsolutePath());
+        System.out.println("ServidorLocal ouvindo em " + URL_LOCAL);
+        System.out.println("Pasta de dados: " + config.pastaBase());
+        System.out.println("Banco de dados: " + arquivoDb);
+        System.out.println("Backups: " + pastaBackups);
+        System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases);
+
+        if (config.bandejaHabilitada()) {
+            boolean comIcone = IconeBandeja.instalar(URL_LOCAL, config.pastaBase(), primeiraExecucao && !abrirNavegador, () -> {
+                System.out.println("Servidor encerrado pelo icone da bandeja.");
+                app.stop();
+                System.exit(0);
+            });
+            if (!comIcone) {
+                System.out.println("Bandeja do sistema indisponivel: o servidor segue rodando sem icone.");
+            }
+        }
+        if (abrirNavegador) {
+            IconeBandeja.abrirNavegador(URL_LOCAL);
+        }
     }
 
     private static void configurarCors(RoutesConfig routes) {
@@ -144,7 +217,63 @@ public class ServidorLocal {
         });
     }
 
-    private static Path pastaDe(String variavelDeAmbiente, String padrao) {
-        return Path.of(System.getenv().getOrDefault(variavelDeAmbiente, padrao)).toAbsolutePath().normalize();
+    /** Quem responde em /api/status com "CertiManager" e outra instancia deste servidor. */
+    private static boolean certiManagerJaEstaRodando() {
+        try {
+            HttpClient cliente = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+            HttpResponse<String> resposta = cliente.send(
+                    HttpRequest.newBuilder(URI.create(URL_LOCAL + "/api/status")).timeout(Duration.ofSeconds(3)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            return resposta.statusCode() == 200 && resposta.body().contains("CertiManager");
+        } catch (IOException | RuntimeException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private static boolean portaOcupada(Throwable erro) {
+        for (Throwable causa = erro; causa != null; causa = causa.getCause()) {
+            if (causa instanceof BindException || causa instanceof JavalinBindException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Sem console (instalado como aplicativo), a saida vai para um arquivo, girado aos 5 MB. */
+    private static void redirecionarLogParaArquivo(Path arquivoLog) {
+        if (arquivoLog == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(arquivoLog.getParent());
+            if (Files.exists(arquivoLog) && Files.size(arquivoLog) > 5L * 1024 * 1024) {
+                Files.move(arquivoLog, arquivoLog.resolveSibling(arquivoLog.getFileName() + ".1"),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            PrintStream saida = new PrintStream(new FileOutputStream(arquivoLog.toFile(), true), true, StandardCharsets.UTF_8);
+            System.setOut(saida);
+            System.setErr(saida);
+            System.out.println();
+            System.out.println("==== CertiManager iniciado em " + LocalDateTime.now().withNano(0) + " ====");
+        } catch (IOException e) {
+            System.err.println("Aviso: nao foi possivel gravar o log em " + arquivoLog + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * A pasta de backup escolhida no instalador pode estar num disco/pendrive que nao existe mais;
+     * nesse caso o servidor sobe mesmo assim, usando a pasta padrao.
+     */
+    private static Path pastaGravavel(Path preferida, Path alternativa) throws IOException {
+        try {
+            return Files.createDirectories(preferida);
+        } catch (IOException e) {
+            System.err.println("Aviso: pasta de backup " + preferida + " indisponivel (" + e.getMessage()
+                    + "). Usando " + alternativa + ".");
+            return Files.createDirectories(alternativa);
+        }
     }
 }
