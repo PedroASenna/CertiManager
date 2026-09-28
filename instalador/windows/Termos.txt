@@ -1,0 +1,32 @@
+﻿========================================================================
+APRESENTAÇÃO COMERCIAL E TERMOS DE RESPONSABILIDADE - CERTIMANAGER
+========================================================================
+
+Apresentação do Sistema: Gestão Inteligente de Certificados Digitais
+
+Olá! Se você chegou até este documento, é porque entende que o controle de certificados digitais no seu escritório pode ser mais eficiente, seguro e livre de dores de cabeça. Abaixo, explicamos detalhadamente como a nossa solução funciona na prática e como ela vai transformar a rotina da sua equipe.
+
+O que é o nosso sistema?
+Pense no nosso sistema como um Cofre Digital Inteligente e Exclusivo para o seu escritório. Ele foi criado para substituir completamente as planilhas manuais, as pastas espalhadas pelo computador e os grupos de WhatsApp onde as senhas dos clientes costumam se perder.
+
+Como funciona no dia a dia da sua equipe?
+1. O Fim da "Caça ao Tesouro": Quando um colaborador precisa emitir uma nota ou acessar o portal do e-CAC de um cliente, ele não precisa mais perguntar no grupo do escritório onde está o certificado. Ele abre o nosso sistema, digita o nome da empresa e pronto: os dados estão na tela, a um clique de distância.
+2. O "Vigia" de Vencimentos: O nosso sistema possui um alerta automático que indica quais certificados estão válidos, quais estão próximos do vencimento e quais já estão vencidos.
+3. Trabalho em Rede, mas com Controle: O sistema é instalado no servidor do seu escritório e toda a equipe pode acessá-lo pelo navegador.
+
+A Questão da Privacidade e Segurança
+Construímos o sistema com uma premissa fundamental: Privacidade Total.
+O sistema funciona de forma 100% Local. Nenhum certificado ou senha vai para a internet. Tudo fica guardado no seu computador. Nós, desenvolvedores, não temos acesso aos dados. O sistema é seu, a casa é sua.
+
+========================================================================
+TERMOS LEGAIS E LIMITAÇÃO DE RESPONSABILIDADE
+========================================================================
+
+AO INSTALAR ESTE SOFTWARE, O LICENCIADO (USUÁRIO) CONCORDA COM OS SEGUINTES TERMOS:
+
+1. USO LOCAL E GUARDA DE DADOS: O Software "CertiManager" opera exclusivamente de maneira local. Os Desenvolvedores (Pedro Sena & Kaio Rodrigues) não possuem acesso, não transmitem e não armazenam em servidores externos qualquer informação, certificado digital (A1, A3, Nuvem), senhas ou dados de clientes inseridos na plataforma.
+2. RESPONSABILIDADE PELOS BACKUPS: Cabe exclusivamente ao Licenciado manter rotinas de backup externo (cópias de segurança) do banco de dados e dos arquivos exportados. Os Desenvolvedores não se responsabilizam por perda de dados decorrente de falhas de hardware, formatações, ataques de ransomware/vírus ou exclusão acidental.
+3. AUSÊNCIA DE GARANTIAS CONTRA TERCEIROS: O Software fornece os meios para organização interna. Os Desenvolvedores isentam-se de responsabilidade por mau uso da ferramenta pelos funcionários do Licenciado, vazamento de senhas por captura de tela ou compartilhamento indevido na rede interna da empresa.
+4. LIMITAÇÃO GERAL: Em nenhuma hipótese os Desenvolvedores serão responsabilizados por lucros cessantes, multas fiscais por perda de prazo de certificados, ou danos indiretos decorrentes do uso ou da incapacidade de uso do software.
+
+Aceite estes termos para prosseguir com a instalação.

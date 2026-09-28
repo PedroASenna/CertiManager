@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if command -v ufw >/dev/null 2>&1; then
+        ufw delete allow 8888/tcp >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CertiManager
+GenericName=Gestão de Certificados Digitais
+Comment=Abre o CertiManager no navegador (inicia o servidor se ele estiver parado)
+Exec=/opt/certimanager/bin/CertiManager --abrir-navegador
+Icon=certimanager
+Terminal=false
+Categories=Office;Utility;
+StartupNotify=false

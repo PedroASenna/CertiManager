@@ -1,0 +1,108 @@
+name: Instaladores
+
+# Pull requests: gera o .exe e o .deb como artefatos, para testar antes de publicar.
+# Tag v* (ex.: v1.2.0): gera os dois e publica uma Release no GitHub com eles anexados.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'Back-end/ServidorLocal/**'
+      - 'Front-end/**'
+      - 'instalador/**'
+      - '.github/workflows/instaladores.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  versao:
+    runs-on: ubuntu-latest
+    outputs:
+      valor: ${{ steps.versao.outputs.valor }}
+    steps:
+      - id: versao
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "valor=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "valor=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: versao
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Front-end/docs/package-lock.json
+      - name: Instalar o Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Gerar o instalador .exe
+        shell: pwsh
+        run: ./instalador/windows/empacotar.ps1 -Versao "${{ needs.versao.outputs.valor }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-windows
+          path: build/saida/*.exe
+          if-no-files-found: error
+
+  linux:
+    needs: versao
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Front-end/docs/package-lock.json
+      - name: Gerar o pacote .deb
+        run: ./instalador/linux/empacotar.sh "${{ needs.versao.outputs.valor }}"
+      - name: Testar a instalacao do .deb
+        run: |
+          sudo apt-get install -y ./build/saida/certimanager_*_amd64.deb
+          /opt/certimanager/bin/CertiManager &
+          for i in $(seq 1 60); do curl -fs http://localhost:8888/api/status && break; sleep 1; done
+          curl -fs http://localhost:8888/api/status | grep -q CertiManager
+          curl -fs http://localhost:8888/ | grep -qi "<html"
+          sudo apt-get remove -y certimanager
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-linux
+          path: build/saida/*.deb
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: saida
+          merge-multiple: true
+      - name: Publicar a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" saida/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "CertiManager $GITHUB_REF_NAME" \
+            --generate-notes
