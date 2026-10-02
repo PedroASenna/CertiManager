@@ -594,8 +594,12 @@ export default function App() {
             onClose={() => setDetailsCert(null)}
             onEdit={() => { setShowModal('edit'); setSelectedId(detailsCert.id); setDetailsCert(null); }}
             onRenew={() => { setRenewCert(detailsCert); setDetailsCert(null); }}
+            canDelete={!!user && user.role >= 2}
             onDelete={async () => {
-              if (window.confirm('Excluir cliente definitivamente?')) { await api.deleteCertificate(token, detailsCert.id); notify('Excluído'); loadCertificates(); setDetailsCert(null); }
+              await api.deleteCertificate(token, detailsCert.id);
+              notify('🗑️ Certificado excluído');
+              loadCertificates();
+              setDetailsCert(null);
             }}
             onCopyPassword={(senha: string) => { copiarTexto(senha); notify('🔑 Senha copiada!'); }}
             token={token}
@@ -619,7 +623,21 @@ export default function App() {
 // ============================================================================
 // FICHA DO CLIENTE (abre ao clicar numa linha da tabela)
 // ============================================================================
-function ClientDetailsModal({ isDark, cert, onClose, onEdit, onRenew, onCopyPassword }: any) {
+function ClientDetailsModal({ isDark, cert, onClose, onEdit, onRenew, onCopyPassword, onDelete, canDelete }: any) {
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState('');
+
+  const confirmarExclusao = async () => {
+    setExcluindo(true);
+    setErroExclusao('');
+    try {
+      await onDelete();
+    } catch (e) {
+      setErroExclusao('Não foi possível excluir o certificado. Verifique se você tem permissão de Administrador.');
+      setExcluindo(false);
+    }
+  };
   const themeCard = isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-neutral-200';
   const themeBox = isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-neutral-50 border-neutral-200';
   const vencimento = cert.expiry_date ? format(parseISO(cert.expiry_date), 'dd/MM/yyyy') : 'N/A';
@@ -718,7 +736,35 @@ function ClientDetailsModal({ isDark, cert, onClose, onEdit, onRenew, onCopyPass
             <Edit className="w-4 h-4 shrink-0" /> Editar
           </button>
         </div>
+        {canDelete && (
+          <button type="button" onClick={() => { setErroExclusao(''); setConfirmandoExclusao(true); }} className={`mt-3 p-2.5 border rounded-xl font-bold flex justify-center items-center gap-1.5 transition-colors text-xs cursor-pointer ${isDark ? 'border-red-900/60 text-red-400 hover:bg-red-950/40' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
+            <Trash2 className="w-4 h-4 shrink-0" /> Excluir Certificado
+          </button>
+        )}
       </motion.div>
+
+      {confirmandoExclusao && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]" onClick={() => !excluindo && setConfirmandoExclusao(false)}>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border ${themeCard}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-full bg-red-500/15 text-red-500"><Trash2 className="w-5 h-5" /></div>
+              <h3 className="text-lg font-bold">Excluir certificado?</h3>
+            </div>
+            <p className="text-sm opacity-80">
+              O certificado de <span className="font-bold">{cert.client_name || 'Sem Razão Social'}</span> ({formatCpfCnpj(cert.doc_number || '')}) será removido definitivamente. Essa ação não pode ser desfeita.
+            </p>
+            {erroExclusao && <p className="text-sm text-red-500 font-semibold mt-3">{erroExclusao}</p>}
+            <div className="flex justify-end gap-3 mt-6">
+              <button type="button" disabled={excluindo} onClick={() => setConfirmandoExclusao(false)} className={`px-4 py-2 border rounded-xl font-bold text-sm transition-colors cursor-pointer disabled:opacity-50 ${isDark ? 'border-slate-600 hover:bg-slate-700' : 'border-neutral-300 hover:bg-neutral-100'}`}>
+                Cancelar
+              </button>
+              <button type="button" disabled={excluindo} onClick={confirmarExclusao} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 shadow transition-colors cursor-pointer disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {excluindo ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
