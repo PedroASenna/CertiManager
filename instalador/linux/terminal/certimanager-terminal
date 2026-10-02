@@ -1,0 +1,8 @@
+#!/bin/sh
+# Abre o site do servidor do CertiManager no navegador. Antes, liga o leitor de cartao A3
+# (AgenteTerminal), caso ele nao tenha subido no login; se ja estiver rodando, ele so sai.
+Servidor="http://localhost:8888"
+[ -r /etc/certimanager/terminal.conf ] && . /etc/certimanager/terminal.conf
+
+setsid /opt/certimanager-terminal/bin/AgenteTerminal >/dev/null 2>&1 < /dev/null &
+exec xdg-open "$Servidor"

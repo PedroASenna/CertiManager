@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+# Atualizacao/reconfiguracao: sugere o servidor que ja estava configurado
+if [ -r /etc/certimanager/terminal.conf ]; then
+    ATUAL="$(sed -n 's/^Servidor=//p' /etc/certimanager/terminal.conf | tr -d "\"'" | head -n 1)"
+    db_get certimanager-terminal/servidor
+    if [ -z "$RET" ] && [ -n "$ATUAL" ]; then
+        db_set certimanager-terminal/servidor "$ATUAL"
+    fi
+fi
+
+db_input high certimanager-terminal/servidor || true
+db_go || true

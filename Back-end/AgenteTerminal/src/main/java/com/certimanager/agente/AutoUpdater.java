@@ -44,6 +44,11 @@ public final class AutoUpdater {
 
     /** Agenda a verificacao de atualizacao para rodar logo na subida e depois a cada N horas. */
     public static void iniciarVerificacaoPeriodica(String servidorCentralUrl, String versaoAtual, long intervaloHoras) {
+        if (!CertificadoService.ehWindows()) {
+            // No Linux o agente e atualizado junto com o pacote .deb (apt), que fica em /opt e e do root.
+            log("Atualizacao automatica so existe no Windows; no Linux, instale o .deb da nova versao.");
+            return;
+        }
         ScheduledExecutorService agendador = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "auto-updater");
             t.setDaemon(true);
@@ -146,7 +151,8 @@ public final class AutoUpdater {
 
     /**
      * Gera um .bat que espera o processo Java atual encerrar, troca o jar antigo pelo novo e
-     * reinicia o AgenteTerminal — como servico do Windows (se instalado) ou como processo solto.
+     * reinicia o AgenteTerminal — como servico do Windows (se instalado), pelo AgenteTerminal.exe
+     * do instalador ou como processo solto.
      * O proprio script se apaga no final.
      */
     private static Path gerarScriptAplicador(Path pasta, Path jarAtual, Path jarNovo) throws IOException {
@@ -157,6 +163,7 @@ public final class AutoUpdater {
                 set SERVICO=%s
                 set JAR_ANTIGO=%s
                 set JAR_NOVO=%s
+                set LANCADOR=%s
 
                 timeout /t 3 /nobreak >nul
 
@@ -168,14 +175,27 @@ public final class AutoUpdater {
                     net start %%SERVICO%% >nul 2>&1
                 ) else (
                     move /y "%%JAR_NOVO%%" "%%JAR_ANTIGO%%" >nul
-                    start "" /min javaw -jar "%%JAR_ANTIGO%%"
+                    if defined LANCADOR (
+                        start "" "%%LANCADOR%%"
+                    ) else (
+                        start "" /min javaw -jar "%%JAR_ANTIGO%%"
+                    )
                 )
 
                 del "%%~f0"
-                """.formatted(NOME_SERVICO, jarAtual, jarNovo);
+                """.formatted(NOME_SERVICO, jarAtual, jarNovo, lancadorJpackage());
 
         Files.writeString(script, conteudo, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         return script;
+    }
+
+    /**
+     * Instalado pelo instalador (.exe), o agente roda pelo AgenteTerminal.exe do jpackage, com o Java
+     * embutido: nao existe "javaw" no PATH do terminal. O jpackage informa o caminho do .exe nesta
+     * propriedade; vazio quando o agente roda com "java -jar".
+     */
+    private static String lancadorJpackage() {
+        return System.getProperty("jpackage.app-path", "");
     }
 
     private static void lancarScriptDesacoplado(Path script, Path pasta) throws IOException {

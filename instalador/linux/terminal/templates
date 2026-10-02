@@ -1,0 +1,8 @@
+Template: certimanager-terminal/servidor
+Type: string
+Default:
+Description: Endereço IP do Servidor do CertiManager:
+ Informe o IP do computador onde o CertiManager Servidor está instalado
+ (exemplo: 192.168.1.50). Se você não informar a porta, é usada a 8888.
+ .
+ Para trocar depois: sudo dpkg-reconfigure certimanager-terminal

@@ -13,6 +13,8 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <gson.version>2.11.0</gson.version>
+    <!-- Os instaladores passam -Dagente.versao=<versao do instalador>; vai para o versao.properties -->
+    <agente.versao>${project.version}</agente.versao>
   </properties>
 
   <dependencies>
@@ -25,6 +27,12 @@
 
   <build>
     <finalName>AgenteTerminal</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

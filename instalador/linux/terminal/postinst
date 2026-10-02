@@ -1,0 +1,42 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+if [ "$1" = "configure" ]; then
+    db_get certimanager-terminal/servidor
+    ENDERECO="$(printf '%s' "$RET" | tr -d '[:space:]"'"'")"
+    ENDERECO="${ENDERECO#*://}"
+    ENDERECO="${ENDERECO%%/*}"
+    [ -n "$ENDERECO" ] || ENDERECO="localhost"
+    case "$ENDERECO" in
+        *:*) ;;
+        *) ENDERECO="$ENDERECO:8888" ;;
+    esac
+
+    # Grava o endereco e mantem as outras opcoes que o administrador tenha colocado (ex.: Pkcs11=)
+    ARQUIVO=/etc/certimanager/terminal.conf
+    mkdir -p /etc/certimanager
+    NOVO="$(mktemp)"
+    {
+        echo "# CertiManager Terminal. Para trocar o servidor: sudo dpkg-reconfigure certimanager-terminal"
+        echo "Servidor=http://$ENDERECO"
+        if [ -f "$ARQUIVO" ]; then
+            grep -v -e '^Servidor=' -e '^# CertiManager Terminal\.' "$ARQUIVO" || true
+        else
+            echo "# Driver do cartao/token fora dos caminhos conhecidos (separe varios com ;):"
+            echo "# Pkcs11=/caminho/do/driver-pkcs11.so"
+        fi
+    } > "$NOVO"
+    install -m 644 "$NOVO" "$ARQUIVO"
+    rm -f "$NOVO"
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true
+fi
+
+db_stop || true
+exit 0
