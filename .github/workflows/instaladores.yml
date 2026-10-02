@@ -64,20 +64,28 @@ jobs:
             }
             throw "Nao respondeu: $url"
           }
+          # Start-Process -Wait esperaria tambem o agente que o instalador deixa rodando; espera so o instalador
+          function Instalar([string]$exe, [string[]]$argumentos) {
+            $p = Start-Process $exe -ArgumentList $argumentos -PassThru
+            $null = $p.Handle  # sem isso o ExitCode pode vir vazio
+            if (-not $p.WaitForExit(300000)) { throw "Instalador travou: $exe" }
+            if ($p.ExitCode -ne 0) { throw "Instalador falhou ($($p.ExitCode)): $exe" }
+          }
           $silencioso = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
 
-          Start-Process "build\saida\CertiManager-Servidor-Setup-$env:VERSAO.exe" -ArgumentList $silencioso -Wait
+          Instalar "build\saida\CertiManager-Servidor-Setup-$env:VERSAO.exe" ($silencioso + '/SENHA=Teste123!')
           Start-Process 'C:\CertiManager\CertiManager.exe' -WorkingDirectory 'C:\CertiManager'
           if ((Esperar 'http://localhost:8888/api/status').aplicacao -ne 'CertiManager') { throw 'Servidor nao respondeu como CertiManager' }
           $agente = Esperar 'http://localhost:8888/api/agente/versao'
           if ($agente.versao -ne $env:VERSAO) { throw "O servidor publica o agente $($agente.versao), esperado $env:VERSAO" }
 
           # O instalador do terminal ja liga o agente no fim da instalacao
-          Start-Process "build\saida\CertiManager-Terminal-Setup-$env:VERSAO.exe" -ArgumentList ($silencioso + '/SERVIDOR=127.0.0.1') -Wait
+          Instalar "build\saida\CertiManager-Terminal-Setup-$env:VERSAO.exe" ($silencioso + '/SERVIDOR=127.0.0.1')
           $status = Esperar 'http://localhost:8889/api/status'
           if ($status.versao -ne $env:VERSAO) { throw "Agente na versao $($status.versao), esperado $env:VERSAO" }
           if (-not (Select-String -Path 'C:\CertiManager-Terminal\config.ini' -Pattern 'Servidor=http://127.0.0.1:8888' -Quiet)) { throw 'config.ini do terminal sem o servidor' }
           Invoke-RestMethod 'http://localhost:8889/api/local-certs' | Out-Null
+          Stop-Process -Name AgenteTerminal, CertiManager -Force -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         with:
           name: instalador-windows-servidor

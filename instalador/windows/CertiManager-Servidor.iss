@@ -111,7 +111,9 @@ begin
     'Defina as credenciais iniciais que serão utilizadas para realizar o primeiro login no sistema.');
   PageAdmin.Add('E-mail de Login Admin:', False);
   PageAdmin.Add('Senha de Acesso:', True); { Campo oculto por asteriscos }
-  PageAdmin.Values[0] := 'admin@escritorio.com.br';
+  { Instalação silenciosa: CertiManager-Servidor-Setup.exe /VERYSILENT /LOGIN=admin@empresa.com.br /SENHA=... }
+  PageAdmin.Values[0] := ExpandConstant('{param:LOGIN|admin@escritorio.com.br}');
+  PageAdmin.Values[1] := ExpandConstant('{param:SENHA|}');
 end;
 
 { Atualização: já existe um banco nesta pasta, então os usuários (e o admin) já existem }
@@ -155,7 +157,9 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if CurPageID = PageAdmin.ID then begin
+  { Na instalação silenciosa o Inno também "clica" em Avançar, mas ninguém veria a mensagem e o
+    instalador ficaria parado nela. Sem /SENHA, o servidor cria o admin com a senha padrão. }
+  if (CurPageID = PageAdmin.ID) and not WizardSilent then begin
     if Trim(PageAdmin.Values[0]) = '' then begin
       MsgBox('O campo E-mail de Login não pode ficar vazio.', mbError, MB_OK);
       Result := False;
