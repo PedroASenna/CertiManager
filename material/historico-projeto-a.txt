@@ -1,0 +1,4 @@
+885f2fe Merge branch 'main' of https://github.com/PedroASenna/Sistema-de-Certificado-em-JAVA
+31eed0f Importação mais eficiente e criação de robôs para automações
+0c49d4d Create README for Digital Certificate Management System
+81fde41 Lançamento da Versão 1.0: Sistema de Gestão de Certificados com Notificações e Sockets
