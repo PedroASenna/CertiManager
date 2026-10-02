@@ -119,7 +119,8 @@ public final class RoboEmail {
 
     private void enviar(Map<String, Object> config, String[] destinatarios, String assunto, String corpo) throws MessagingException {
         String remetente = String.valueOf(config.get("email_remetente"));
-        String senhaApp = String.valueOf(config.get("senha_app"));
+        // O Google mostra a senha de app em blocos ("abcd efgh ijkl mnop"); o SMTP so aceita sem espacos.
+        String senhaApp = String.valueOf(config.get("senha_app")).replaceAll("\\s", "");
 
         Properties propriedades = new Properties();
         propriedades.put("mail.smtp.auth", "true");

@@ -31,7 +31,7 @@ public final class ConfigEmailRotas {
                         modo_disparo = excluded.modo_disparo,
                         email_equipe = excluded.email_equipe
                     """,
-                    texto(corpo, "email_remetente"), texto(corpo, "senha_app"),
+                    texto(corpo, "email_remetente"), texto(corpo, "senha_app").replaceAll("\\s", ""),
                     texto(corpo, "modo_disparo"), texto(corpo, "email_equipe"));
 
             ctx.json(Map.of("success", true));

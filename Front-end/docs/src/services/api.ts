@@ -15,6 +15,7 @@ export const api = {
 
   async getCertificates(token: string): Promise<Certificate[]> {
     const res = await fetch(`${API_URL}/certificates`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error("Erro ao buscar certificados");
     return res.json();
   },
 
@@ -24,7 +25,10 @@ export const api = {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Erro ao salvar");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Erro ao salvar certificado");
+    }
     return res.json();
   },
 
@@ -34,12 +38,17 @@ export const api = {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Erro ao editar");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Erro ao editar certificado");
+    }
     return res.json();
   },
 
   async deleteCertificate(token: string, id: number) {
-    await fetch(`${API_URL}/certificates/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/certificates/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error("Erro ao remover certificado");
+    return res.json();
   },
 
   // --------------------------------------------------------
@@ -122,7 +131,7 @@ export const api = {
   // --------------------------------------------------------
   async getConfigEmail(token: string) {
     const res = await fetch(`${API_URL}/config-email`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error('Erro ao buscar configuração');
+    if (!res.ok) throw new Error('Erro ao buscar configuração de e-mail');
     return res.json();
   },
 
@@ -132,7 +141,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Erro ao salvar configuração');
+    if (!res.ok) throw new Error('Erro ao salvar configuração de e-mail');
+    return res.json();
+  },
+
+  async triggerEmailRobot(token: string) {
+    const res = await fetch(`${API_URL}/trigger-email-robot`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Erro ao acionar robô de e-mails');
+    }
+    return res.json();
+  },
+
+  async getEmailLogs(token: string) {
+    const res = await fetch(`${API_URL}/email-logs`, { headers: { Authorization: `Bearer ${token}` } });
     return res.json();
   },
 
@@ -142,7 +165,17 @@ export const api = {
       // Ele vai tentar conversar com o mini-robô rodando no computador de quem abriu a tela
       const res = await fetch(`http://localhost:8889/api/local-certs`);
       if (!res.ok) throw new Error("Erro do agente");
-      return await res.json();
+      const certs = await res.json();
+      // O AgenteTerminal devolve o subjectDN do certificado; no padrão ICP-Brasil o CN é "NOME:CPF/CNPJ".
+      return certs.map((c: any) => {
+        const cn = (/(?:^|,)CN=((?:\\.|[^,])*)/.exec(c.subjectDN || '')?.[1] || c.alias || '').replace(/\\(.)/g, '$1');
+        const separador = cn.lastIndexOf(':');
+        return {
+          nome: c.nome ?? (separador > 0 ? cn.slice(0, separador) : cn).trim(),
+          cpf_cnpj: c.cpf_cnpj ?? (separador > 0 ? cn.slice(separador + 1).replace(/\D/g, '') : ''),
+          data_vencimento: c.data_vencimento ?? (c.validoAte || '').slice(0, 10),
+        };
+      });
     } catch (err) {
       throw new Error("AGENTE_NAO_ENCONTRADO");
     }

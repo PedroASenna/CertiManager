@@ -75,6 +75,7 @@ jobs:
         run: ./instalador/linux/empacotar.sh "${{ needs.versao.outputs.valor }}"
       - name: Testar a instalacao do .deb
         run: |
+          sudo apt-get update
           sudo apt-get install -y ./build/saida/certimanager_*_amd64.deb
           /opt/certimanager/bin/CertiManager &
           for i in $(seq 1 60); do curl -fs http://localhost:8888/api/status && break; sleep 1; done
