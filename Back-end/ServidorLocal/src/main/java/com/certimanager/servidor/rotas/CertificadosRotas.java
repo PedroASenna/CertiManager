@@ -15,7 +15,8 @@ import java.util.Map;
 public final class CertificadosRotas {
 
     private static final List<String> CAMPOS_EDITAVEIS = List.of(
-            "client_name", "doc_number", "expiry_date", "issue_date", "type", "password", "email_cliente");
+            "client_name", "doc_number", "expiry_date", "issue_date", "type", "password", "email_cliente",
+            "telefone", "responsavel", "observacoes");
 
     private CertificadosRotas() {
     }
@@ -40,12 +41,14 @@ public final class CertificadosRotas {
             }
 
             long id = banco.inserirRetornandoId("""
-                    INSERT INTO certificados (client_name, doc_number, expiry_date, issue_date, type, password, email_cliente)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO certificados (client_name, doc_number, expiry_date, issue_date, type, password, email_cliente,
+                                              telefone, responsavel, observacoes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     clientName, docNumber,
                     textoOuVazio(corpo, "expiry_date"), textoOuVazio(corpo, "issue_date"),
-                    textoOuVazio(corpo, "type"), textoOuVazio(corpo, "password"), textoOuVazio(corpo, "email_cliente"));
+                    textoOuVazio(corpo, "type"), textoOuVazio(corpo, "password"), textoOuVazio(corpo, "email_cliente"),
+                    textoOuVazio(corpo, "telefone"), textoOuVazio(corpo, "responsavel"), textoOuVazio(corpo, "observacoes"));
 
             Sessao sessao = AuthContexto.atual(ctx);
             auditoria.registrar(sessao.email(), "Adicionou o certificado de " + clientName);

@@ -2,8 +2,12 @@ package com.certimanager.servidor.db;
 
 import com.certimanager.servidor.auth.Senhas;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /** Cria as tabelas na primeira execucao e semeia o usuario administrador padrao. */
 public final class Esquema {
@@ -39,6 +43,9 @@ public final class Esquema {
                         type TEXT,
                         password TEXT,
                         email_cliente TEXT,
+                        telefone TEXT,
+                        responsavel TEXT,
+                        observacoes TEXT,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP
                     )
                     """);
@@ -61,12 +68,32 @@ public final class Esquema {
                     """);
         }
 
+        adicionarColunasQueFaltam(banco);
+
         Object algumUsuario = banco.consultarUm("SELECT id FROM usuarios LIMIT 1");
         if (algumUsuario == null) {
             banco.executar(
                     "INSERT INTO usuarios (email, senha_hash, role) VALUES (?, ?, ?)",
                     emailAdminInicial, Senhas.gerarHash(senhaAdminInicial), 2
             );
+        }
+    }
+
+    // Bancos criados (ou migrados) antes da ficha do cliente nao tem estas colunas.
+    private static void adicionarColunasQueFaltam(Banco banco) throws SQLException {
+        Set<String> existentes = new HashSet<>();
+        try (Statement st = banco.bruta().createStatement();
+             ResultSet colunas = st.executeQuery("PRAGMA table_info(certificados)")) {
+            while (colunas.next()) {
+                existentes.add(colunas.getString("name"));
+            }
+        }
+        for (String coluna : List.of("telefone", "responsavel", "observacoes")) {
+            if (!existentes.contains(coluna)) {
+                try (Statement st = banco.bruta().createStatement()) {
+                    st.execute("ALTER TABLE certificados ADD COLUMN " + coluna + " TEXT");
+                }
+            }
         }
     }
 }
