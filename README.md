@@ -71,56 +71,80 @@ Veja as seções [Compilando o Servidor Central](#3-compilando-o-servidor-centra
 
 ## 📦 Instalação pelo instalador (recomendado)
 
-Na página de [Releases](https://github.com/PedroASenna/CertiManager/releases) do GitHub ficam os instaladores prontos, **já com o Java embutido** (não precisa instalar Java, Node nem Maven para usar):
+Na página de [Releases](https://github.com/PedroASenna/CertiManager/releases) do GitHub ficam os instaladores prontos, **já com o Java embutido** (não precisa instalar Java, Node nem Maven para usar). São dois instaladores por sistema:
 
-| Sistema | Arquivo |
-|---|---|
-| Windows (64 bits) | `CertiManager-Setup-<versão>.exe` |
-| Linux (Debian/Ubuntu, 64 bits) | `certimanager_<versão>_amd64.deb` |
+| | Windows (64 bits) | Linux (Debian/Ubuntu, 64 bits) |
+|---|---|---|
+| **Servidor** (o computador principal, um só) | `CertiManager-Servidor-Setup-<versão>.exe` | `certimanager-servidor_<versão>_amd64.deb` |
+| **Terminal** (os outros computadores) | `CertiManager-Terminal-Setup-<versão>.exe` | `certimanager-terminal_<versão>_amd64.deb` |
+
+- O **Servidor** guarda o banco, roda o robô de e-mails e serve o site na porta `8888`.
+- O **Terminal** instala o leitor de cartão A3 (`AgenteTerminal`, porta `8889`, acessível só pelo próprio computador) e o atalho **CertiManager**, que abre o site do servidor. É ele que faz o botão **"Ler do Computador"** funcionar com o cartão/token espetado naquele computador.
+- Se o computador do servidor também tiver leitor de cartão, instale os dois nele (no Terminal, informe `localhost` como servidor).
 
 O servidor instalado roda **em segundo plano, sem janela nenhuma**, e aparece como um ícone (escudo azul) na **bandeja do sistema**, perto do relógio. Pelo ícone:
 - **clique duplo** ou **Abrir CertiManager** → abre o sistema no navegador;
 - **Abrir pasta de dados** → abre a pasta com o banco, os logs e os backups;
 - **Encerrar servidor** → desliga o servidor (pede confirmação, porque os outros computadores perdem o acesso).
 
-O atalho "CertiManager" da área de trabalho/menu iniciar abre o sistema no navegador e, se o servidor estiver parado, liga ele antes. Abrir o atalho com o servidor já rodando não cria um segundo servidor.
+O atalho "CertiManager" da área de trabalho/menu iniciar do servidor abre o sistema no navegador e, se o servidor estiver parado, liga ele antes. Abrir o atalho com o servidor já rodando não cria um segundo servidor.
+
+**Atualização dos terminais:** cada instalador do Servidor leva junto o leitor de cartão da mesma versão (na pasta `releases/`). Os terminais Windows consultam o servidor a cada 4 horas e se atualizam sozinhos; não é preciso passar em cada máquina. No Linux, o terminal é atualizado instalando o `.deb` novo.
 
 ### Windows
 
-1. Baixe e execute o `CertiManager-Setup-<versão>.exe` (pede permissão de administrador).
-2. Aceite os termos, confirme a pasta (padrão `C:\CertiManager`) e escolha o modo:
-   - **SERVIDOR** (o computador principal, ex: `192.168.100.4`): escolha as pastas de backup/relatórios e defina o **e-mail e a senha do administrador** — esse será o primeiro login do sistema. Deixe marcada a opção de iniciar com o Windows.
-   - **TERMINAL** (os outros computadores): informe o IP do servidor. Ele só cria um atalho que abre `http://<ip-do-servidor>:8888` no navegador.
-3. No servidor, o instalador também libera a porta `8888` no Firewall do Windows.
+**Servidor**
+1. Baixe e execute o `CertiManager-Servidor-Setup-<versão>.exe` (pede permissão de administrador).
+2. Aceite os termos, confirme a pasta (padrão `C:\CertiManager`), escolha as pastas de backup/relatórios e defina o **e-mail e a senha do administrador** — esse será o primeiro login do sistema. Deixe marcada a opção de iniciar com o Windows.
+3. O instalador também libera a porta `8888` no Firewall do Windows.
 
 **Atualizando** (inclusive uma instalação antiga, do tempo do `iniciar.bat`): rode o instalador novo por cima, na mesma pasta. Ele encerra o servidor que estiver rodando, troca só os arquivos do programa e **mantém o `database.sqlite`, o `config.ini`, os backups e os logs**. Como o banco já existe, a tela do administrador não aparece. O `iniciar.bat` e os atalhos antigos que apontavam para ele são removidos (o `CertiManager.jar` e a pasta `public` antigos ficam na pasta, mas deixam de ser usados e podem ser apagados).
 
-Tudo fica em `C:\CertiManager`: `database.sqlite` (banco), `config.ini`, `logs\servidor.log` (o que antes aparecia no terminal), `Backups\` e o programa em si (`CertiManager.exe`, `app\` e `runtime\`).
+Tudo fica em `C:\CertiManager`: `database.sqlite` (banco), `config.ini`, `logs\servidor.log` (o que antes aparecia no terminal), `Backups\`, `releases\` (leitor de cartão para os terminais) e o programa em si (`CertiManager.exe`, `app\` e `runtime\`).
 
 > O servidor inicia quando alguém **faz login** no Windows do servidor (atalho na pasta de Inicialização de todos os usuários), porque o ícone da bandeja só existe dentro de uma sessão. Num servidor que reinicia sozinho (ex: atualização do Windows de madrugada), configure o login automático do Windows ou deixe a sessão aberta.
 
+**Terminal**
+1. Instale antes o driver do cartão/token (ex.: SafeNet Authentication Client), como para qualquer uso do A3.
+2. Baixe e execute o `CertiManager-Terminal-Setup-<versão>.exe` e informe o **IP do servidor** (ex: `192.168.100.4`).
+3. Ele cria o atalho **CertiManager** (abre `http://<ip-do-servidor>:8888`) e liga o leitor de cartão, que passa a iniciar sozinho, sem janela, sempre que alguém entra no Windows.
+
+Fica em `C:\CertiManager-Terminal` (`config.ini` com o endereço do servidor e `logs\agente.log`). Para instalar sem perguntas: `CertiManager-Terminal-Setup-<versão>.exe /VERYSILENT /SERVIDOR=192.168.100.4`. Se o terminal tinha o agente antigo instalado como serviço (`instalar-servico.ps1`), o instalador remove esse serviço: rodando como serviço, o agente não enxerga o certificado do cartão do usuário.
+
 ### Linux (Debian/Ubuntu)
 
+**Servidor**
 ```bash
-sudo apt install ./certimanager_<versão>_amd64.deb
+sudo apt install ./certimanager-servidor_<versão>_amd64.deb
 ```
 Depois, abra **CertiManager** pelo menu de aplicativos. Nas próximas vezes o servidor inicia sozinho no login, em segundo plano, com o ícone na bandeja.
 
-- Os dados ficam na pasta do usuário que roda o servidor: `~/.local/share/certimanager` (banco, `logs/servidor.log`, `backups/`). Use sempre o mesmo usuário para o servidor.
+- Os dados ficam na pasta do usuário que roda o servidor: `~/.local/share/certimanager` (banco, `logs/servidor.log`, `backups/`). Use sempre o mesmo usuário para o servidor. O leitor de cartão para os terminais fica em `/opt/certimanager/lib/app/releases`.
 - No **GNOME** (Ubuntu padrão já vem com ela ativa), o ícone da bandeja precisa da extensão *AppIndicator and KStatusNotifierItem Support* (`gnome-shell-extension-appindicator`). KDE, XFCE, Cinnamon e MATE mostram o ícone sem nada extra. Sem bandeja, o servidor funciona normalmente, só sem o ícone.
 - Se o firewall `ufw` estiver ativo, a porta `8888` é liberada na instalação.
-- Para desinstalar: `sudo apt remove certimanager` (os dados em `~/.local/share/certimanager` não são apagados).
+- Quem tinha o pacote antigo `certimanager` instalado: o `apt install` acima troca um pelo outro, mantendo os dados.
+- Para desinstalar: `sudo apt remove certimanager-servidor` (os dados em `~/.local/share/certimanager` não são apagados).
+
+**Terminal**
+```bash
+sudo apt install ./certimanager-terminal_<versão>_amd64.deb
+```
+A instalação pergunta o **IP do servidor** (para trocar depois: `sudo dpkg-reconfigure certimanager-terminal`). Depois, abra **CertiManager** pelo menu de aplicativos: ele liga o leitor de cartão e abre o site do servidor. Nas próximas vezes o leitor inicia sozinho no login.
+
+- O leitor usa o driver PKCS#11 do cartão. Ele já procura o do SafeNet (`libeTPkcs11.so`), SafeSign (`libaetpkss.so`), Watchdata e o OpenSC (que é instalado junto, com o `pcscd`). Se o driver do seu cartão estiver em outro lugar, informe em `Pkcs11=` no `/etc/certimanager/terminal.conf`.
+- Log em `~/.local/state/certimanager-terminal/agente.log`.
+- Para desinstalar: `sudo apt remove certimanager-terminal`.
 
 ### Gerando os instaladores (para quem mantém o projeto)
 
 Os instaladores são gerados pelo GitHub Actions (`.github/workflows/instaladores.yml`):
-- Em todo **pull request** que mexe no servidor, no Front-end ou em `instalador/`, o `.exe` e o `.deb` são gerados e ficam para download na aba **Actions** → execução → *Artifacts* (bom para testar antes de publicar).
+- Em todo **pull request** que mexe no servidor, no agente, no Front-end ou em `instalador/`, os quatro instaladores (Servidor e Terminal, `.exe` e `.deb`) são gerados, instalados e testados, e ficam para download na aba **Actions** → execução → *Artifacts* (bom para testar antes de publicar). O teste do Terminal no Linux usa um cartão simulado (SoftHSM).
 - Para **publicar uma versão**, crie e envie uma tag `v<versão>`:
   ```bash
   git tag v1.1.0
   git push origin v1.1.0
   ```
-  O workflow gera os dois instaladores e cria a Release com eles anexados.
+  O workflow gera os quatro instaladores e cria a Release com eles anexados.
 
 Os instaladores empacotam o Front-end **a partir do código deste repositório** (`Front-end/docs`). Antes de publicar uma versão, confirme que o código do Front-end aqui está atualizado com o que está em uso — senão a versão publicada volta a tela antiga.
 
@@ -254,6 +278,8 @@ java -cp target/ServidorLocal.jar com.certimanager.servidor.ferramentas.Migrador
 
 ### 4. Compilando e Instalando o AgenteTerminal (em cada terminal)
 
+> O caminho recomendado é o instalador do **Terminal** (veja [Instalação pelo instalador](#-instalação-pelo-instalador-recomendado)). Os passos abaixo são para instalar à mão, a partir do código.
+
 O código-fonte fica em `Back-end/AgenteTerminal`.
 
 **a) Compilar o jar:**
@@ -283,6 +309,9 @@ Para desinstalar de um terminal, use `desinstalar-servico.ps1` (também como Adm
 | `CERTIMANAGER_CORS_ORIGIN` | `*` | Origem permitida a chamar a API local (restrinja em produção, ex: `http://servidor:8888`) |
 | `CERTIMANAGER_INTERVALO_ATUALIZACAO_HORAS` | `4` | De quantas em quantas horas verifica se há atualização |
 | `CERTIMANAGER_AUTO_UPDATE` | `true` | Defina como `false` para desligar o auto-update (útil em testes) |
+| `CERTIMANAGER_PKCS11` | *(caminhos conhecidos)* | Só no Linux: driver PKCS#11 do cartão/token (vários separados por `;`) |
+
+Instalado pelos instaladores, as mesmas opções ficam no arquivo de configuração (`Servidor=`, `Pkcs11=`...): `C:\CertiManager-Terminal\config.ini` no Windows e `/etc/certimanager/terminal.conf` no Linux. As variáveis de ambiente têm prioridade sobre o arquivo.
 
 ---
 

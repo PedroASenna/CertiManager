@@ -4,10 +4,16 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
+import java.net.BindException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -16,8 +22,9 @@ import java.util.concurrent.Executors;
 /**
  * Mini-servico que roda localmente em cada terminal (recepcao, fiscal, etc.) para ler o cartao A3
  * inserido no leitor USB daquela maquina e expor os certificados para o navegador via HTTP.
+ * Funciona no Windows (cofre MSCAPI) e no Linux (driver PKCS#11 do cartao).
  *
- * O navegador nao pode acessar o cofre do Windows diretamente (trava de seguranca dos browsers),
+ * O navegador nao pode acessar o cartao diretamente (trava de seguranca dos browsers),
  * entao o front-end chama este agente em http://localhost:8889 quando o usuario clica em
  * "Ler do Computador".
  */
@@ -28,39 +35,67 @@ public class AgenteTerminal {
     private static final Gson GSON = new Gson();
 
     public static void main(String[] args) throws IOException {
+        redirecionarLogParaArquivo();
+        ConfiguracaoAgente config = ConfiguracaoAgente.carregar();
         String versaoAtual = carregarVersao();
-        String servidorCentralUrl = System.getenv().getOrDefault("CERTIMANAGER_SERVIDOR_URL", "http://localhost:8888");
-        String origemPermitida = System.getenv().getOrDefault("CERTIMANAGER_CORS_ORIGIN", "*");
-        long intervaloAtualizacaoHoras = Long.parseLong(System.getenv().getOrDefault("CERTIMANAGER_INTERVALO_ATUALIZACAO_HORAS", "4"));
-        boolean autoUpdateHabilitado = !"false".equalsIgnoreCase(System.getenv("CERTIMANAGER_AUTO_UPDATE"));
+        String servidorCentralUrl = config.servidorUrl();
+        String origemPermitida = config.origemPermitida();
 
-        HttpServer servidor = HttpServer.create(new InetSocketAddress(PORTA), 0);
-        servidor.createContext("/api/local-certs", exchange -> tratarLocalCerts(exchange, origemPermitida));
+        // So o navegador deste computador chama o agente (http://localhost:8889): nao abre a porta
+        // para a rede, senao qualquer maquina do escritorio veria os certificados deste cartao.
+        HttpServer servidor;
+        try {
+            servidor = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), PORTA), 0);
+        } catch (BindException jaRodando) {
+            System.out.println("A porta " + PORTA + " ja esta em uso: o AgenteTerminal ja esta rodando neste computador.");
+            return;
+        }
+        servidor.createContext("/api/local-certs", exchange -> tratarLocalCerts(exchange, origemPermitida, config));
         servidor.createContext("/api/status", exchange -> tratarStatus(exchange, origemPermitida, versaoAtual));
         servidor.setExecutor(Executors.newFixedThreadPool(4));
         servidor.start();
 
-        System.out.println("AgenteTerminal v" + versaoAtual + " ouvindo em http://localhost:" + PORTA);
+        System.out.println("AgenteTerminal v" + versaoAtual + " ouvindo em http://localhost:" + PORTA
+                + " (servidor central: " + servidorCentralUrl + ")");
 
-        if (autoUpdateHabilitado) {
-            AutoUpdater.iniciarVerificacaoPeriodica(servidorCentralUrl, versaoAtual, intervaloAtualizacaoHoras);
+        if (config.autoUpdateHabilitado()) {
+            AutoUpdater.iniciarVerificacaoPeriodica(servidorCentralUrl, versaoAtual, config.intervaloAtualizacaoHoras());
         } else {
             System.out.println("Auto-update desabilitado (CERTIMANAGER_AUTO_UPDATE=false).");
         }
     }
 
-    private static void tratarLocalCerts(HttpExchange exchange, String origemPermitida) throws IOException {
+    /** Instalado pelo .exe/.deb o agente roda sem console: grava a saida em -Dcertimanager.log. */
+    private static void redirecionarLogParaArquivo() {
+        String caminho = System.getProperty("certimanager.log");
+        if (caminho == null || caminho.isBlank()) {
+            return;
+        }
+        try {
+            Path arquivo = Path.of(ConfiguracaoAgente.expandirHome(caminho.trim()));
+            Files.createDirectories(arquivo.toAbsolutePath().getParent());
+            // Comeca de novo quando passa de 5 MB, para o log nao crescer para sempre
+            boolean anexar = !Files.exists(arquivo) || Files.size(arquivo) < 5L * 1024 * 1024;
+            PrintStream log = new PrintStream(new FileOutputStream(arquivo.toFile(), anexar), true, StandardCharsets.UTF_8);
+            System.setOut(log);
+            System.setErr(log);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Aviso: nao foi possivel gravar o log em " + caminho + ": " + e.getMessage());
+        }
+    }
+
+    private static void tratarLocalCerts(HttpExchange exchange, String origemPermitida, ConfiguracaoAgente config) throws IOException {
         aplicarCors(exchange, origemPermitida);
         if (respondeuPreflight(exchange)) {
             return;
         }
 
         try {
-            List<CertificadoInfo> certificados = CertificadoService.listarCertificados();
+            List<CertificadoInfo> certificados = CertificadoService.listarCertificados(config);
             responder(exchange, 200, GSON.toJson(certificados));
         } catch (Exception e) {
             String erro = GSON.toJson(Map.of(
-                    "erro", "Nao foi possivel acessar o cofre de certificados do Windows.",
+                    "erro", "Nao foi possivel ler os certificados do cartao/token deste computador.",
                     "detalhe", String.valueOf(e.getMessage())
             ));
             responder(exchange, 500, erro);
@@ -88,6 +123,9 @@ public class AgenteTerminal {
         exchange.getResponseHeaders().add("Access-Control-Allow-Origin", origemPermitida);
         exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, OPTIONS");
         exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+        // O site vem do servidor (http://ip-do-servidor:8888) e chama o localhost: o Chrome pede esta
+        // permissao ("Private Network Access") antes de deixar uma pagina da rede falar com o localhost.
+        exchange.getResponseHeaders().add("Access-Control-Allow-Private-Network", "true");
     }
 
     private static void responder(HttpExchange exchange, int codigoStatus, String corpoJson) throws IOException {

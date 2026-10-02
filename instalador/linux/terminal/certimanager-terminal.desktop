@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CertiManager
+GenericName=Gestão de Certificados Digitais
+Comment=Abre o CertiManager do servidor no navegador (e liga o leitor de cartão A3, se estiver parado)
+Exec=/usr/bin/certimanager-terminal
+Icon=certimanager-terminal
+Terminal=false
+Categories=Office;Utility;
+StartupNotify=false

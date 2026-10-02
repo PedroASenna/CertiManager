@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CertiManager (leitor de cartão A3)
+Comment=Lê o cartão/token A3 deste computador para o botão "Ler do Computador" do CertiManager
+Exec=/opt/certimanager-terminal/bin/AgenteTerminal
+Icon=certimanager-terminal
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5

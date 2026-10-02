@@ -1,13 +1,15 @@
 name: Instaladores
 
-# Pull requests: gera o .exe e o .deb como artefatos, para testar antes de publicar.
-# Tag v* (ex.: v1.2.0): gera os dois e publica uma Release no GitHub com eles anexados.
+# Gera os instaladores do Servidor e do Terminal, para Windows (.exe) e Linux (.deb).
+# Pull requests: ficam como artefatos da execucao, para testar antes de publicar.
+# Tag v* (ex.: v1.2.0): gera os quatro e publica uma Release no GitHub com eles anexados.
 on:
   push:
     tags: ['v*']
   pull_request:
     paths:
       - 'Back-end/ServidorLocal/**'
+      - 'Back-end/AgenteTerminal/**'
       - 'Front-end/**'
       - 'instalador/**'
       - '.github/workflows/instaladores.yml'
@@ -47,13 +49,44 @@ jobs:
           cache-dependency-path: Front-end/docs/package-lock.json
       - name: Instalar o Inno Setup
         run: choco install innosetup --no-progress -y
-      - name: Gerar o instalador .exe
+      - name: Gerar os instaladores .exe
         shell: pwsh
         run: ./instalador/windows/empacotar.ps1 -Versao "${{ needs.versao.outputs.valor }}"
+      - name: Testar a instalacao dos .exe
+        shell: pwsh
+        env:
+          VERSAO: ${{ needs.versao.outputs.valor }}
+          CERTIMANAGER_BANDEJA: 'false'
+        run: |
+          function Esperar([string]$url) {
+            for ($i = 0; $i -lt 90; $i++) {
+              try { return Invoke-RestMethod $url } catch { Start-Sleep 1 }
+            }
+            throw "Nao respondeu: $url"
+          }
+          $silencioso = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+
+          Start-Process "build\saida\CertiManager-Servidor-Setup-$env:VERSAO.exe" -ArgumentList $silencioso -Wait
+          Start-Process 'C:\CertiManager\CertiManager.exe' -WorkingDirectory 'C:\CertiManager'
+          if ((Esperar 'http://localhost:8888/api/status').aplicacao -ne 'CertiManager') { throw 'Servidor nao respondeu como CertiManager' }
+          $agente = Esperar 'http://localhost:8888/api/agente/versao'
+          if ($agente.versao -ne $env:VERSAO) { throw "O servidor publica o agente $($agente.versao), esperado $env:VERSAO" }
+
+          # O instalador do terminal ja liga o agente no fim da instalacao
+          Start-Process "build\saida\CertiManager-Terminal-Setup-$env:VERSAO.exe" -ArgumentList ($silencioso + '/SERVIDOR=127.0.0.1') -Wait
+          $status = Esperar 'http://localhost:8889/api/status'
+          if ($status.versao -ne $env:VERSAO) { throw "Agente na versao $($status.versao), esperado $env:VERSAO" }
+          if (-not (Select-String -Path 'C:\CertiManager-Terminal\config.ini' -Pattern 'Servidor=http://127.0.0.1:8888' -Quiet)) { throw 'config.ini do terminal sem o servidor' }
+          Invoke-RestMethod 'http://localhost:8889/api/local-certs' | Out-Null
       - uses: actions/upload-artifact@v4
         with:
-          name: instalador-windows
-          path: build/saida/*.exe
+          name: instalador-windows-servidor
+          path: build/saida/CertiManager-Servidor-Setup-*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-windows-terminal
+          path: build/saida/CertiManager-Terminal-Setup-*.exe
           if-no-files-found: error
 
   linux:
@@ -71,21 +104,59 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: Front-end/docs/package-lock.json
-      - name: Gerar o pacote .deb
+      - name: Gerar os pacotes .deb
         run: ./instalador/linux/empacotar.sh "${{ needs.versao.outputs.valor }}"
-      - name: Testar a instalacao do .deb
+      - name: Testar a instalacao do .deb do Servidor
+        env:
+          VERSAO: ${{ needs.versao.outputs.valor }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y ./build/saida/certimanager_*_amd64.deb
-          /opt/certimanager/bin/CertiManager &
+          sudo apt-get install -y ./build/saida/certimanager-servidor_*_amd64.deb
+          CERTIMANAGER_BANDEJA=false /opt/certimanager/bin/CertiManager &
           for i in $(seq 1 60); do curl -fs http://localhost:8888/api/status && break; sleep 1; done
           curl -fs http://localhost:8888/api/status | grep -q CertiManager
           curl -fs http://localhost:8888/ | grep -qi "<html"
-          sudo apt-get remove -y certimanager
+          curl -fs http://localhost:8888/api/agente/versao | grep -q "\"versao\":\"$VERSAO\""
+          sudo apt-get remove -y certimanager-servidor
+      - name: Testar a instalacao do .deb do Terminal (com um cartao simulado)
+        env:
+          VERSAO: ${{ needs.versao.outputs.valor }}
+        run: |
+          echo "certimanager-terminal certimanager-terminal/servidor string 192.168.1.50" | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./build/saida/certimanager-terminal_*_amd64.deb softhsm2
+          grep -qx "Servidor=http://192.168.1.50:8888" /etc/certimanager/terminal.conf
+
+          # SoftHSM faz o papel do cartao A3: um certificado ICP-Brasil e o da AC (que nao deve aparecer)
+          export SOFTHSM2_CONF="$RUNNER_TEMP/softhsm2.conf"
+          mkdir -p "$RUNNER_TEMP/tokens"
+          echo "directories.tokendir = $RUNNER_TEMP/tokens" > "$SOFTHSM2_CONF"
+          softhsm2-util --init-token --free --label CARTAO --pin 1234 --so-pin 1234
+          cd "$RUNNER_TEMP"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout ac.key -out ac.pem -days 30 -subj "/CN=AC Teste" -addext basicConstraints=critical,CA:TRUE
+          openssl req -newkey rsa:2048 -nodes -keyout titular.key -out titular.csr -subj "/C=BR/O=ICP-Brasil/CN=EMPRESA TESTE LTDA:12345678000199"
+          openssl x509 -req -in titular.csr -CA ac.pem -CAkey ac.key -CAcreateserial -days 365 -outform der -out titular.der
+          openssl x509 -in ac.pem -outform der -out ac.der
+          MODULO=/usr/lib/softhsm/libsofthsm2.so
+          pkcs11-tool --module $MODULO --login --pin 1234 --write-object titular.der --type cert --id 01 --label Titular
+          pkcs11-tool --module $MODULO --login --pin 1234 --write-object ac.der --type cert --id 02 --label AC
+          echo "Pkcs11=$MODULO" | sudo tee -a /etc/certimanager/terminal.conf
+
+          /opt/certimanager-terminal/bin/AgenteTerminal &
+          for i in $(seq 1 60); do curl -fs http://localhost:8889/api/status && break; sleep 1; done
+          curl -fs http://localhost:8889/api/status | grep -q "\"versao\":\"$VERSAO\""
+          curl -fs http://localhost:8889/api/local-certs | tee certs.json
+          grep -q "EMPRESA TESTE LTDA:12345678000199" certs.json
+          ! grep -q "AC Teste" certs.json
+          sudo apt-get purge -y certimanager-terminal
       - uses: actions/upload-artifact@v4
         with:
-          name: instalador-linux
-          path: build/saida/*.deb
+          name: instalador-linux-servidor
+          path: build/saida/certimanager-servidor_*.deb
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalador-linux-terminal
+          path: build/saida/certimanager-terminal_*.deb
           if-no-files-found: error
 
   release:
