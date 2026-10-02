@@ -12,6 +12,9 @@ export interface Certificate {
   type: string;
   password?: string;
   email_cliente?: string;
+  telefone?: string;
+  responsavel?: string;
+  observacoes?: string;
   created_at: string;
 }
 
