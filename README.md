@@ -98,6 +98,8 @@ O atalho "CertiManager" da área de trabalho/menu iniciar do servidor abre o sis
 2. Aceite os termos, confirme a pasta (padrão `C:\CertiManager`), escolha as pastas de backup/relatórios e defina o **e-mail e a senha do administrador** — esse será o primeiro login do sistema. Deixe marcada a opção de iniciar com o Windows.
 3. O instalador também libera a porta `8888` no Firewall do Windows.
 
+Para instalar sem perguntas: `CertiManager-Servidor-Setup-<versão>.exe /VERYSILENT /LOGIN=admin@empresa.com.br /SENHA=<senha>` (sem `/SENHA`, o administrador é criado com a senha padrão).
+
 **Atualizando** (inclusive uma instalação antiga, do tempo do `iniciar.bat`): rode o instalador novo por cima, na mesma pasta. Ele encerra o servidor que estiver rodando, troca só os arquivos do programa e **mantém o `database.sqlite`, o `config.ini`, os backups e os logs**. Como o banco já existe, a tela do administrador não aparece. O `iniciar.bat` e os atalhos antigos que apontavam para ele são removidos (o `CertiManager.jar` e a pasta `public` antigos ficam na pasta, mas deixam de ser usados e podem ser apagados).
 
 Tudo fica em `C:\CertiManager`: `database.sqlite` (banco), `config.ini`, `logs\servidor.log` (o que antes aparecia no terminal), `Backups\`, `releases\` (leitor de cartão para os terminais) e o programa em si (`CertiManager.exe`, `app\` e `runtime\`).

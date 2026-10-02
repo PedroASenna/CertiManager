@@ -128,7 +128,8 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if (CurPageID = PageIP.ID) and (Trim(PageIP.Values[0]) = '') then begin
+  { Na instalação silenciosa ninguém veria a mensagem; sem /SERVIDOR usa o próprio computador }
+  if (CurPageID = PageIP.ID) and (Trim(PageIP.Values[0]) = '') and not WizardSilent then begin
     MsgBox('Você precisa informar o endereço IP do Servidor para continuar.', mbError, MB_OK);
     Result := False;
   end;

@@ -73,7 +73,7 @@ jobs:
           }
           $silencioso = '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
 
-          Instalar "build\saida\CertiManager-Servidor-Setup-$env:VERSAO.exe" $silencioso
+          Instalar "build\saida\CertiManager-Servidor-Setup-$env:VERSAO.exe" ($silencioso + '/SENHA=Teste123!')
           Start-Process 'C:\CertiManager\CertiManager.exe' -WorkingDirectory 'C:\CertiManager'
           if ((Esperar 'http://localhost:8888/api/status').aplicacao -ne 'CertiManager') { throw 'Servidor nao respondeu como CertiManager' }
           $agente = Esperar 'http://localhost:8888/api/agente/versao'
