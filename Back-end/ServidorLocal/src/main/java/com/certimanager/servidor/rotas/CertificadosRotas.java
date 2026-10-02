@@ -88,12 +88,19 @@ public final class CertificadosRotas {
         });
 
         routes.delete("/api/certificates/{id}", ctx -> {
+            // Excluir certificado e exclusivo do perfil Administrador (role 2).
             AuthContexto.exigirRole(ctx, 2);
             long id = Long.parseLong(ctx.pathParam("id"));
+            Map<String, Object> certificado = banco.consultarUm(
+                    "SELECT client_name, doc_number FROM certificados WHERE id = ?", id);
+            if (certificado == null) {
+                throw new NotFoundResponse();
+            }
             banco.executar("DELETE FROM certificados WHERE id = ?", id);
 
             Sessao sessao = AuthContexto.atual(ctx);
-            auditoria.registrar(sessao.email(), "Removeu o certificado ID " + id);
+            auditoria.registrar(sessao.email(), "Excluiu o certificado ID " + id + " de "
+                    + certificado.get("client_name") + " (" + certificado.get("doc_number") + ")");
             ctx.json(Map.of("success", true));
         });
     }
