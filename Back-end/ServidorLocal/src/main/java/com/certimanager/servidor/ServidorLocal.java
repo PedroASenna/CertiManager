@@ -125,7 +125,7 @@ public class ServidorLocal {
         RoboEmail roboEmail = new RoboEmail(banco);
 
         Banco bancoFinal = banco;
-        LimiteDemo limiteDemo = new LimiteDemo(config.modoDemo(), LimiteDemo.LIMITE_PADRAO, bancoFinal);
+        LimiteDemo limiteDemo = new LimiteDemo(LimiteDemo.LIMITE_PADRAO, bancoFinal);
         Javalin app = Javalin.create(cfg -> {
             if (Files.isDirectory(pastaFrontend)) {
                 cfg.staticFiles.add(sf -> {
@@ -163,9 +163,7 @@ public class ServidorLocal {
         System.out.println("Banco de dados: " + arquivoDb);
         System.out.println("Backups: " + pastaBackups);
         System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases);
-        if (limiteDemo.ativo()) {
-            System.out.println("Modo demonstracao: limite de " + limiteDemo.limite() + " certificados.");
-        }
+        System.out.println("Versao DEMO: limite de " + limiteDemo.limite() + " certificados.");
 
         if (config.bandejaHabilitada()) {
             boolean comIcone = IconeBandeja.instalar(URL_LOCAL, config.pastaBase(), primeiraExecucao && !abrirNavegador, () -> {
