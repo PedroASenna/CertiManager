@@ -66,6 +66,15 @@ public final class Configuracao {
         return "true".equalsIgnoreCase(ativo) ? pastaBase.resolve("logs").resolve("servidor.log") : null;
     }
 
+    /** Versao de demonstracao: limita a quantidade de certificados (ver demo/LimiteDemo). */
+    public boolean modoDemo() {
+        String ligado = valor("CERTIMANAGER_MODO_DEMO", "certimanager.demo");
+        if (ligado == null) {
+            ligado = configIni.get("Demo");
+        }
+        return "true".equalsIgnoreCase(ligado);
+    }
+
     public boolean bandejaHabilitada() {
         return !"false".equalsIgnoreCase(valor("CERTIMANAGER_BANDEJA", "certimanager.bandeja"));
     }

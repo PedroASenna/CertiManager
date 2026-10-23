@@ -903,7 +903,8 @@ function ManualForm({ onClose, onSuccess, token, certificates, isDark, user }: a
       await api.addCertificate(token, dados);
       onSuccess();
     } catch (err) {
-      alert('Erro ao Salvar.');
+      // Mostra a mensagem do servidor (ex.: limite da versão demo), senão um aviso genérico
+      alert(err instanceof Error && err.message ? err.message : 'Erro ao Salvar.');
     }
   };
 

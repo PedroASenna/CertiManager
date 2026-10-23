@@ -7,6 +7,7 @@ import com.certimanager.servidor.auth.Sessao;
 import com.certimanager.servidor.db.Auditoria;
 import com.certimanager.servidor.db.Banco;
 import com.certimanager.servidor.db.Esquema;
+import com.certimanager.servidor.demo.LimiteDemo;
 import com.certimanager.servidor.email.RoboEmail;
 import com.certimanager.servidor.rotas.AgenteRotas;
 import com.certimanager.servidor.rotas.AutenticacaoRotas;
@@ -124,6 +125,7 @@ public class ServidorLocal {
         RoboEmail roboEmail = new RoboEmail(banco);
 
         Banco bancoFinal = banco;
+        LimiteDemo limiteDemo = new LimiteDemo(config.modoDemo(), LimiteDemo.LIMITE_PADRAO, bancoFinal);
         Javalin app = Javalin.create(cfg -> {
             if (Files.isDirectory(pastaFrontend)) {
                 cfg.staticFiles.add(sf -> {
@@ -143,10 +145,10 @@ public class ServidorLocal {
 
             routes.get("/api/status", ctx -> ctx.json(Map.of("aplicacao", "CertiManager", "status", "ok")));
             AutenticacaoRotas.registrar(routes, bancoFinal, jwt);
-            CertificadosRotas.registrar(routes, bancoFinal, auditoria);
+            CertificadosRotas.registrar(routes, bancoFinal, auditoria, limiteDemo);
             UsuariosRotas.registrar(routes, bancoFinal, auditoria);
             LogsRotas.registrar(routes, bancoFinal);
-            ImportacaoRotas.registrar(routes, bancoFinal, auditoria);
+            ImportacaoRotas.registrar(routes, bancoFinal, auditoria, limiteDemo);
             ManutencaoRotas.registrar(routes, bancoFinal, auditoria, pastaBackups);
             CnpjRotas.registrar(routes);
             ConfigEmailRotas.registrar(routes, bancoFinal, roboEmail);
@@ -161,6 +163,9 @@ public class ServidorLocal {
         System.out.println("Banco de dados: " + arquivoDb);
         System.out.println("Backups: " + pastaBackups);
         System.out.println("Pasta de releases do AgenteTerminal: " + pastaReleases);
+        if (limiteDemo.ativo()) {
+            System.out.println("Modo demonstracao: limite de " + limiteDemo.limite() + " certificados.");
+        }
 
         if (config.bandejaHabilitada()) {
             boolean comIcone = IconeBandeja.instalar(URL_LOCAL, config.pastaBase(), primeiraExecucao && !abrirNavegador, () -> {
