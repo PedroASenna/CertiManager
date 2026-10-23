@@ -4,7 +4,6 @@ import com.certimanager.servidor.auth.AuthContexto;
 import com.certimanager.servidor.auth.Sessao;
 import com.certimanager.servidor.db.Auditoria;
 import com.certimanager.servidor.db.Banco;
-import com.certimanager.servidor.demo.LimiteDemo;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.NotFoundResponse;
@@ -22,7 +21,7 @@ public final class CertificadosRotas {
     private CertificadosRotas() {
     }
 
-    public static void registrar(RoutesConfig routes, Banco banco, Auditoria auditoria, LimiteDemo limiteDemo) {
+    public static void registrar(RoutesConfig routes, Banco banco, Auditoria auditoria) {
         routes.get("/api/certificates", ctx -> {
             List<Map<String, Object>> certificados = banco.consultar(
                     "SELECT * FROM certificados ORDER BY expiry_date ASC");
@@ -31,7 +30,6 @@ public final class CertificadosRotas {
 
         routes.post("/api/certificates", ctx -> {
             AuthContexto.exigirRole(ctx, 1);
-            limiteDemo.exigirEspacoParaNovoCertificado();
             Map<?, ?> corpo = ctx.bodyAsClass(Map.class);
             String clientName = textoOuVazio(corpo, "client_name");
             String docNumber = textoOuVazio(corpo, "doc_number");

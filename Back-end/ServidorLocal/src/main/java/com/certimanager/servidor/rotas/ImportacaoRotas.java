@@ -4,7 +4,6 @@ import com.certimanager.servidor.auth.AuthContexto;
 import com.certimanager.servidor.auth.Sessao;
 import com.certimanager.servidor.db.Auditoria;
 import com.certimanager.servidor.db.Banco;
-import com.certimanager.servidor.demo.LimiteDemo;
 import io.javalin.config.RoutesConfig;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.UploadedFile;
@@ -44,7 +43,7 @@ public final class ImportacaoRotas {
     private ImportacaoRotas() {
     }
 
-    public static void registrar(RoutesConfig routes, Banco banco, Auditoria auditoria, LimiteDemo limiteDemo) {
+    public static void registrar(RoutesConfig routes, Banco banco, Auditoria auditoria) {
         routes.post("/api/import-batch", ctx -> {
             Sessao sessao = AuthContexto.exigirRole(ctx, 2);
             List<UploadedFile> arquivos = ctx.uploadedFiles("files");
@@ -102,7 +101,7 @@ public final class ImportacaoRotas {
 
                         Map<String, Object> existente = banco.consultarUm(
                                 "SELECT id FROM certificados WHERE client_name = ?", nomeComum);
-                        if (existente == null && limiteDemo.cabem(1)) {
+                        if (existente == null) {
                             banco.executar("""
                                     INSERT INTO certificados (client_name, doc_number, expiry_date, issue_date, type, password)
                                     VALUES (?, ?, ?, ?, 'A1', ?)
